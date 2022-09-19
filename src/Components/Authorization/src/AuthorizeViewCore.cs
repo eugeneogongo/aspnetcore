@@ -40,7 +40,10 @@ public abstract class AuthorizeViewCore : ComponentBase
     /// The resource to which access is being controlled.
     /// </summary>
     [Parameter] public object? Resource { get; set; }
-
+    /// <summary>
+    ///Exposes the AuthorizationResult
+    /// </summary>
+ public AuthorizationResult? AuthorizationResult { get;}
     [CascadingParameter] private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     [Inject] private IAuthorizationPolicyProvider AuthorizationPolicyProvider { get; set; } = default!;
@@ -109,8 +112,8 @@ public abstract class AuthorizeViewCore : ComponentBase
 
         var policy = await AuthorizationPolicy.CombineAsync(
             AuthorizationPolicyProvider, authorizeData);
-        var result = await AuthorizationService.AuthorizeAsync(user, Resource, policy!);
-        return result.Succeeded;
+        AuthorizationResult = await AuthorizationService.AuthorizeAsync(user, Resource, policy!);
+        return  AuthorizationResult.Succeeded;
     }
 
     private static void EnsureNoAuthenticationSchemeSpecified(IAuthorizeData[] authorizeData)
