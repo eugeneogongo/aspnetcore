@@ -43,7 +43,7 @@ public abstract class AuthorizeViewCore : ComponentBase
     /// <summary>
     ///Exposes the AuthorizationResult
     /// </summary>
- public AuthorizationResult? AuthorizationResult { get;}
+    [CascadingParameter] public AuthorizationResult? AuthorizationResult { get;}
     [CascadingParameter] private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     [Inject] private IAuthorizationPolicyProvider AuthorizationPolicyProvider { get; set; } = default!;
