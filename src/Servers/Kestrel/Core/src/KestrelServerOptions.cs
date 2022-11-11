@@ -252,9 +252,6 @@ public class KestrelServerOptions
         writer.WritePropertyName(nameof(AllowResponseHeaderCompression));
         writer.WriteBooleanValue(AllowResponseHeaderCompression);
 
-        writer.WritePropertyName(nameof(EnableAltSvc));
-        writer.WriteBooleanValue(EnableAltSvc);
-
         writer.WritePropertyName(nameof(IsDevCertLoaded));
         writer.WriteBooleanValue(IsDevCertLoaded);
 
@@ -290,7 +287,7 @@ public class KestrelServerOptions
             var logger = ApplicationServices!.GetRequiredService<ILogger<KestrelServer>>();
             try
             {
-                DefaultCertificate = CertificateManager.Instance.ListCertificates(StoreName.My, StoreLocation.CurrentUser, isValid: true)
+                DefaultCertificate = CertificateManager.Instance.ListCertificates(StoreName.My, StoreLocation.CurrentUser, isValid: true, requireExportable: false)
                     .FirstOrDefault();
 
                 if (DefaultCertificate != null)
