@@ -18,29 +18,17 @@ using Microsoft.Extensions.Hosting;
 
 namespace Microsoft.AspNetCore.Hosting;
 
-internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup, ISupportsUseDefaultServiceProvider
+internal sealed class GenericWebHostBuilder : WebHostBuilderBase, ISupportsStartup
 {
-    private readonly IHostBuilder _builder;
-    private readonly IConfiguration _config;
-    private object? _startupObject;
+    private const string _startupConfigName = "__UseStartup.StartupObject";
     private readonly object _startupKey = new object();
 
     private AggregateException? _hostingStartupErrors;
     private HostingStartupWebHostBuilder? _hostingStartupWebHostBuilder;
 
     public GenericWebHostBuilder(IHostBuilder builder, WebHostBuilderOptions options)
+        : base(builder, options)
     {
-        _builder = builder;
-        var configBuilder = new ConfigurationBuilder()
-            .AddInMemoryCollection();
-
-        if (!options.SuppressEnvironmentConfiguration)
-        {
-            configBuilder.AddEnvironmentVariables(prefix: "ASPNETCORE_");
-        }
-
-        _config = configBuilder.Build();
-
         _builder.ConfigureHostConfiguration(config =>
         {
             config.AddConfiguration(_config);
@@ -74,12 +62,12 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
 #pragma warning restore CS0618 // Type or member is obsolete
 
             services.Configure<GenericWebHostServiceOptions>(options =>
-        {
-            // Set the options
-            options.WebHostOptions = webHostOptions;
-            // Store and forward any startup errors
-            options.HostingStartupExceptions = _hostingStartupErrors;
-        });
+            {
+                // Set the options
+                options.WebHostOptions = webHostOptions;
+                // Store and forward any startup errors
+                options.HostingStartupExceptions = _hostingStartupErrors;
+            });
 
             // REVIEW: This is bad since we don't own this type. Anybody could add one of these and it would mess things up
             // We need to flow this differently
@@ -91,6 +79,9 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
             services.TryAddSingleton<IHttpContextFactory, DefaultHttpContextFactory>();
             services.TryAddScoped<IMiddlewareFactory, MiddlewareFactory>();
             services.TryAddSingleton<IApplicationBuilderFactory, ApplicationBuilderFactory>();
+
+            services.AddMetrics();
+            services.TryAddSingleton<HostingMetrics>();
 
             // IMPORTANT: This needs to run *before* direct calls on the builder (like UseStartup)
             _hostingStartupWebHostBuilder?.ConfigureServices(webhostContext, services);
@@ -172,51 +163,6 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
         }
     }
 
-    public IWebHost Build()
-    {
-        throw new NotSupportedException($"Building this implementation of {nameof(IWebHostBuilder)} is not supported.");
-    }
-
-    public IWebHostBuilder ConfigureAppConfiguration(Action<WebHostBuilderContext, IConfigurationBuilder> configureDelegate)
-    {
-        _builder.ConfigureAppConfiguration((context, builder) =>
-        {
-            var webhostBuilderContext = GetWebHostBuilderContext(context);
-            configureDelegate(webhostBuilderContext, builder);
-        });
-
-        return this;
-    }
-
-    public IWebHostBuilder ConfigureServices(Action<IServiceCollection> configureServices)
-    {
-        return ConfigureServices((context, services) => configureServices(services));
-    }
-
-    public IWebHostBuilder ConfigureServices(Action<WebHostBuilderContext, IServiceCollection> configureServices)
-    {
-        _builder.ConfigureServices((context, builder) =>
-        {
-            var webhostBuilderContext = GetWebHostBuilderContext(context);
-            configureServices(webhostBuilderContext, builder);
-        });
-
-        return this;
-    }
-
-    public IWebHostBuilder UseDefaultServiceProvider(Action<WebHostBuilderContext, ServiceProviderOptions> configure)
-    {
-        _builder.UseServiceProviderFactory(context =>
-        {
-            var webHostBuilderContext = GetWebHostBuilderContext(context);
-            var options = new ServiceProviderOptions();
-            configure(webHostBuilderContext, options);
-            return new DefaultServiceProviderFactory(options);
-        });
-
-        return this;
-    }
-
     public IWebHostBuilder UseStartup([DynamicallyAccessedMembers(StartupLinkerOptions.Accessibility)] Type startupType)
     {
         var startupAssemblyName = startupType.Assembly.GetName().Name;
@@ -224,16 +170,16 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
         UseSetting(WebHostDefaults.ApplicationKey, startupAssemblyName);
 
         // UseStartup can be called multiple times. Only run the last one.
-        _startupObject = startupType;
-
-        var state = new UseStartupState(startupType);
+        _builder.Properties[_startupConfigName] = startupType;
 
         _builder.ConfigureServices((context, services) =>
         {
             // Run this delegate if the startup type matches
-            if (object.ReferenceEquals(_startupObject, state.StartupType))
+            if (_builder.Properties.TryGetValue(_startupConfigName, out var startupObject) &&
+                object.ReferenceEquals(startupObject, startupType))
             {
-                UseStartup(state.StartupType, context, services);
+                _builder.Properties.Remove(_startupConfigName);
+                UseStartup(startupType, context, services);
             }
         });
 
@@ -249,7 +195,7 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
         UseSetting(WebHostDefaults.ApplicationKey, startupAssemblyName);
 
         // Clear the startup type
-        _startupObject = startupFactory;
+        _builder.Properties[_startupConfigName] = startupFactory;
 
         _builder.ConfigureServices(ConfigureStartup);
 
@@ -257,8 +203,10 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
         void ConfigureStartup(HostBuilderContext context, IServiceCollection services)
         {
             // UseStartup can be called multiple times. Only run the last one.
-            if (object.ReferenceEquals(_startupObject, startupFactory))
+            if (_builder.Properties.TryGetValue(_startupConfigName, out var startupObject) &&
+                object.ReferenceEquals(startupObject, startupFactory))
             {
+                _builder.Properties.Remove(_startupConfigName);
                 var webHostBuilderContext = GetWebHostBuilderContext(context);
                 var instance = startupFactory(webHostBuilderContext) ?? throw new InvalidOperationException("The specified factory returned null startup instance.");
                 UseStartup(instance.GetType(), context, services, instance);
@@ -372,15 +320,17 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
         UseSetting(WebHostDefaults.ApplicationKey, startupAssemblyName);
 
         // Clear the startup type
-        _startupObject = configure;
+        _builder.Properties[_startupConfigName] = configure;
 
         _builder.ConfigureServices((context, services) =>
         {
-            if (object.ReferenceEquals(_startupObject, configure))
+            if (_builder.Properties.TryGetValue(_startupConfigName, out var startupObject) &&
+                object.ReferenceEquals(startupObject, configure))
             {
+                _builder.Properties.Remove(_startupConfigName);
                 services.Configure<GenericWebHostServiceOptions>(options =>
                 {
-                    options.ConfigureApplication = app => configure(app);
+                    options.ConfigureApplication = configure;
                 });
             }
         });
@@ -395,12 +345,14 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
         UseSetting(WebHostDefaults.ApplicationKey, startupAssemblyName);
 
         // Clear the startup type
-        _startupObject = configure;
+        _builder.Properties[_startupConfigName] = configure;
 
         _builder.ConfigureServices((context, services) =>
         {
-            if (object.ReferenceEquals(_startupObject, configure))
+            if (_builder.Properties.TryGetValue(_startupConfigName, out var startupObject) &&
+                object.ReferenceEquals(startupObject, configure))
             {
+                _builder.Properties.Remove(_startupConfigName);
                 services.Configure<GenericWebHostServiceOptions>(options =>
                 {
                     var webhostBuilderContext = GetWebHostBuilderContext(context);
@@ -409,40 +361,6 @@ internal sealed class GenericWebHostBuilder : IWebHostBuilder, ISupportsStartup,
             }
         });
 
-        return this;
-    }
-
-    private WebHostBuilderContext GetWebHostBuilderContext(HostBuilderContext context)
-    {
-        if (!context.Properties.TryGetValue(typeof(WebHostBuilderContext), out var contextVal))
-        {
-            // Use _config as a fallback for WebHostOptions in case the chained source was removed from the hosting IConfigurationBuilder.
-            var options = new WebHostOptions(context.Configuration, fallbackConfiguration: _config, environment: context.HostingEnvironment);
-            var webHostBuilderContext = new WebHostBuilderContext
-            {
-                Configuration = context.Configuration,
-                HostingEnvironment = new HostingEnvironment(),
-            };
-            webHostBuilderContext.HostingEnvironment.Initialize(context.HostingEnvironment.ContentRootPath, options, baseEnvironment: context.HostingEnvironment);
-            context.Properties[typeof(WebHostBuilderContext)] = webHostBuilderContext;
-            context.Properties[typeof(WebHostOptions)] = options;
-            return webHostBuilderContext;
-        }
-
-        // Refresh config, it's periodically updated/replaced
-        var webHostContext = (WebHostBuilderContext)contextVal;
-        webHostContext.Configuration = context.Configuration;
-        return webHostContext;
-    }
-
-    public string? GetSetting(string key)
-    {
-        return _config[key];
-    }
-
-    public IWebHostBuilder UseSetting(string key, string? value)
-    {
-        _config[key] = value;
         return this;
     }
 

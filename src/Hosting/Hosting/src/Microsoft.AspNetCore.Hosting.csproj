@@ -16,6 +16,11 @@
     <Compile Include="$(SharedSourceRoot)StackTrace\**\*.cs" />
     <Compile Include="$(SharedSourceRoot)ErrorPage\**\*.cs" />
     <Compile Include="$(SharedSourceRoot)StaticWebAssets\**\*.cs" LinkBase="StaticWebAssets" />
+    <Compile Include="$(SharedSourceRoot)Metrics\MetricsExtensions.cs" />
+    <Compile Include="$(SharedSourceRoot)Metrics\MetricsConstants.cs" />
+    <Compile Include="$(SharedSourceRoot)Diagnostics\ActivityCreator.cs" />
+    <Compile Include="$(SharedSourceRoot)Diagnostics\RouteDiagnosticsHelpers.cs" />
+    <Compile Include="$(SharedSourceRoot)Obsoletions.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +30,7 @@
     <Reference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
     <Reference Include="Microsoft.Extensions.Configuration.FileExtensions" />
     <Reference Include="Microsoft.Extensions.Configuration" />
+    <Reference Include="Microsoft.Extensions.Diagnostics" />
     <Reference Include="Microsoft.Extensions.DependencyInjection" />
     <Reference Include="Microsoft.Extensions.FileProviders.Physical" />
     <Reference Include="Microsoft.Extensions.FileProviders.Composite" />
@@ -33,6 +39,7 @@
     <Reference Include="Microsoft.Extensions.Options" />
 
     <Compile Include="$(SharedSourceRoot)TypeNameHelper\*.cs" />
+    <Compile Include="$(SharedSourceRoot)HttpExtensions.cs" />
   </ItemGroup>
 
   <ItemGroup>

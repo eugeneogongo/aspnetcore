@@ -13,6 +13,7 @@
   <ItemGroup>
     <Reference Include="Microsoft.AspNetCore.Authentication" />
     <Reference Include="Microsoft.AspNetCore.Authorization.Policy" />
+    <Reference Include="Microsoft.AspNetCore.Antiforgery" />
     <Reference Include="Microsoft.AspNetCore.Diagnostics" />
     <Reference Include="Microsoft.AspNetCore.HostFiltering" />
     <Reference Include="Microsoft.AspNetCore.Hosting" />
@@ -32,6 +33,10 @@
     <Reference Include="Microsoft.Extensions.Logging.Console" />
     <Reference Include="Microsoft.Extensions.Logging.Debug" />
     <Reference Include="Microsoft.Extensions.Logging.EventSource" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedSourceRoot)Obsoletions.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>

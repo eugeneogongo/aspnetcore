@@ -1,28 +1,22 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal;
-using Microsoft.AspNetCore.Server.Kestrel.Https;
-using Microsoft.AspNetCore.Testing;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xunit;
 
 namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests;
 
 public class AddressBinderTests
 {
+    private readonly Func<ListenOptions, ListenOptions> _noopUseHttps = l => l;
+
     [Theory]
     [InlineData("http://10.10.10.10:5000/", "10.10.10.10", 5000)]
     [InlineData("http://[::1]:5000", "::1", 5000)]
@@ -57,6 +51,7 @@ public class AddressBinderTests
     [InlineData("randomhost")]
     [InlineData("+")]
     [InlineData("contoso.com")]
+    [InlineData(".localhost")]
     public void ParseAddressDefaultsToAnyIPOnInvalidIPAddress(string host)
     {
         var listenOptions = AddressBinder.ParseAddress($"http://{host}", out var https);
@@ -76,6 +71,29 @@ public class AddressBinderTests
         Assert.Equal(IPAddress.Loopback, listenOptions.IPEndPoint.Address);
         Assert.Equal(80, listenOptions.IPEndPoint.Port);
         Assert.False(https);
+    }
+
+    [Theory]
+    [InlineData("http://sample.localhost:5000", 5000, false)]
+    [InlineData("http://SAMPLE.localhost:5000", 5000, false)]
+    [InlineData("http://SAMPLE.Localhost:5000", 5000, false, "http://SAMPLE.localhost:5000")]
+    [InlineData("HTTP://sample.localhost:5000", 5000, false, "http://sample.localhost:5000")]
+    [InlineData("https://sample.localhost:5001", 5001, true)]
+    [InlineData("http://multilevel.dev.localhost:5000", 5000, false)]
+    [InlineData("https://multilevel.dev.localhost:5001", 5001, true)]
+    public void ParseAddressWithLocalhostTld(string address, int expectedPort, bool expectedHttps, string expectedAddress = null)
+    {
+        var listenOptions = AddressBinder.ParseAddress(address, out var https);
+        Assert.IsType<LocalhostListenOptions>(listenOptions);
+        Assert.IsType<IPEndPoint>(listenOptions.EndPoint);
+        Assert.Equal(IPAddress.Loopback, listenOptions.IPEndPoint.Address);
+        Assert.Equal(expectedPort, listenOptions.IPEndPoint.Port);
+        Assert.Equal(expectedHttps, https);
+        if (https)
+        {
+            listenOptions.IsTls = true;
+        }
+        Assert.Equal(expectedAddress ?? address, listenOptions.GetDisplayName());
     }
 
     [Fact]
@@ -172,7 +190,7 @@ public class AddressBinderTests
             endpoint => throw new AddressInUseException("already in use"));
 
         await Assert.ThrowsAsync<IOException>(() =>
-            AddressBinder.BindAsync(options.ListenOptions, addressBindContext, CancellationToken.None));
+            AddressBinder.BindAsync(options.GetListenOptions(), addressBindContext, _noopUseHttps, CancellationToken.None));
     }
 
     [Fact]
@@ -193,7 +211,7 @@ public class AddressBinderTests
             logger,
             endpoint => Task.CompletedTask);
 
-        var bindTask = AddressBinder.BindAsync(options.ListenOptions, addressBindContext, CancellationToken.None);
+        var bindTask = AddressBinder.BindAsync(options.GetListenOptions(), addressBindContext, _noopUseHttps, CancellationToken.None);
         Assert.True(bindTask.IsCompletedSuccessfully);
 
         var log = Assert.Single(logger.Messages);
@@ -221,7 +239,7 @@ public class AddressBinderTests
 
         addressBindContext.ServerAddressesFeature.PreferHostingUrls = true;
 
-        var bindTask = AddressBinder.BindAsync(options.ListenOptions, addressBindContext, CancellationToken.None);
+        var bindTask = AddressBinder.BindAsync(options.GetListenOptions(), addressBindContext, _noopUseHttps, CancellationToken.None);
         Assert.True(bindTask.IsCompletedSuccessfully);
 
         var log = Assert.Single(logger.Messages);
@@ -247,7 +265,7 @@ public class AddressBinderTests
             });
 
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            AddressBinder.BindAsync(options.ListenOptions, addressBindContext, new CancellationToken(true)));
+            AddressBinder.BindAsync(options.GetListenOptions(), addressBindContext, _noopUseHttps, new CancellationToken(true)));
     }
 
     [Theory]
@@ -284,7 +302,7 @@ public class AddressBinderTests
                 return Task.CompletedTask;
             });
 
-        await AddressBinder.BindAsync(options.ListenOptions, addressBindContext, CancellationToken.None);
+        await AddressBinder.BindAsync(options.GetListenOptions(), addressBindContext, _noopUseHttps, CancellationToken.None);
 
         Assert.True(ipV4Attempt, "Should have attempted to bind to IPAddress.Any");
         Assert.True(ipV6Attempt, "Should have attempted to bind to IPAddress.IPv6Any");
@@ -315,7 +333,7 @@ public class AddressBinderTests
                 return Task.CompletedTask;
             });
 
-        await AddressBinder.BindAsync(options.ListenOptions, addressBindContext, CancellationToken.None);
+        await AddressBinder.BindAsync(options.GetListenOptions(), addressBindContext, _noopUseHttps, CancellationToken.None);
 
         Assert.Contains(endpoints, e => e.IPEndPoint.Port == 5000 && !e.IsTls);
     }

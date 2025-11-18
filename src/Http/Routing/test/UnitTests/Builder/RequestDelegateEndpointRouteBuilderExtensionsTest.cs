@@ -402,7 +402,7 @@ public class RequestDelegateEndpointRouteBuilderExtensionsTest
         var builder = new DefaultEndpointRouteBuilder(new ApplicationBuilder(EmptyServiceProvider.Instance));
 
         // Act
-        var endpointBuilder = builder.MapMethods("/", new[] { "METHOD" }, HandleHttpMetdata);
+        var endpointBuilder = builder.MapMethods("/", new[] { "METHOD" }, HandleHttpMetadata);
         endpointBuilder.WithMetadata(new HttpMethodMetadata(new[] { "BUILDER" }));
 
         // Assert
@@ -411,10 +411,11 @@ public class RequestDelegateEndpointRouteBuilderExtensionsTest
 
         // As with the Delegate Map method overloads for route handlers, the attributes on the RequestDelegate
         // can override the HttpMethodMetadata. Extension methods could already do this.
-        Assert.Equal(3, endpoint.Metadata.Count);
+        Assert.Equal(4, endpoint.Metadata.Count);
         Assert.Equal("METHOD", GetMethod(endpoint.Metadata[0]));
         Assert.Equal("ATTRIBUTE", GetMethod(endpoint.Metadata[1]));
         Assert.Equal("BUILDER", GetMethod(endpoint.Metadata[2]));
+        Assert.IsAssignableFrom<IRouteDiagnosticsMetadata>(endpoint.Metadata[3]);
 
         Assert.Equal("BUILDER", endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Single());
 
@@ -486,6 +487,7 @@ public class RequestDelegateEndpointRouteBuilderExtensionsTest
 
         Assert.Collection(metadata,
             m => Assert.IsAssignableFrom<MethodInfo>(m),
+            m => Assert.IsAssignableFrom<IParameterBindingMetadata>(m),
             m => Assert.IsAssignableFrom<ParameterNameMetadata>(m),
             m =>
             {
@@ -499,7 +501,8 @@ public class RequestDelegateEndpointRouteBuilderExtensionsTest
             },
             m => Assert.Equal("System.Runtime.CompilerServices.NullableContextAttribute", m.ToString()),
             m => Assert.IsAssignableFrom<Attribute1>(m),
-            m => Assert.IsAssignableFrom<Attribute2>(m));
+            m => Assert.IsAssignableFrom<Attribute2>(m),
+            m => Assert.IsAssignableFrom<IRouteDiagnosticsMetadata>(m));
     }
 
     [Fact]
@@ -523,7 +526,7 @@ public class RequestDelegateEndpointRouteBuilderExtensionsTest
     private static Task Handle(HttpContext context) => Task.CompletedTask;
 
     [HttpMethod("ATTRIBUTE")]
-    private static Task HandleHttpMetdata(HttpContext context) => Task.CompletedTask;
+    private static Task HandleHttpMetadata(HttpContext context) => Task.CompletedTask;
 
     private class HttpMethodAttribute : Attribute, IHttpMethodMetadata
     {

@@ -14,11 +14,11 @@ internal static class ParsingHelpers
         return headers.TryGetValue(key, out value) ? value : StringValues.Empty;
     }
 
-    public static StringValues GetHeaderSplit(IHeaderDictionary headers, string key)
+    public static string[] GetHeaderSplit(IHeaderDictionary headers, string key)
     {
         var values = GetHeaderUnmodified(headers, key);
 
-        StringValues result = default;
+        ValueListBuilder<string> strings = new([null!, null!, null!, null!]);
 
         foreach (var segment in new HeaderSegmentCollection(values))
         {
@@ -27,10 +27,13 @@ internal static class ParsingHelpers
                 var value = DeQuote(segment.Data.Value);
                 if (!string.IsNullOrEmpty(value))
                 {
-                    result = StringValues.Concat(in result, value);
+                    strings.Add(value);
                 }
             }
         }
+
+        string[] result = strings.AsSpan().ToArray();
+        strings.Dispose();
 
         return result;
     }
@@ -46,18 +49,15 @@ internal static class ParsingHelpers
     public static void SetHeaderJoined(IHeaderDictionary headers, string key, StringValues value)
     {
         ArgumentNullException.ThrowIfNull(headers);
+        ArgumentException.ThrowIfNullOrEmpty(key);
 
-        if (string.IsNullOrEmpty(key))
-        {
-            throw new ArgumentNullException(nameof(key));
-        }
         if (StringValues.IsNullOrEmpty(value))
         {
             headers.Remove(key);
         }
         else
         {
-            headers[key] = string.Join(",", value.Select(QuoteIfNeeded));
+            headers[key] = string.Join(',', value.Select(QuoteIfNeeded));
         }
     }
 
@@ -87,11 +87,8 @@ internal static class ParsingHelpers
     public static void SetHeaderUnmodified(IHeaderDictionary headers, string key, StringValues? values)
     {
         ArgumentNullException.ThrowIfNull(headers);
+        ArgumentException.ThrowIfNullOrEmpty(key);
 
-        if (string.IsNullOrEmpty(key))
-        {
-            throw new ArgumentNullException(nameof(key));
-        }
         if (!values.HasValue || StringValues.IsNullOrEmpty(values.GetValueOrDefault()))
         {
             headers.Remove(key);
@@ -119,7 +116,7 @@ internal static class ParsingHelpers
         }
         else
         {
-            headers[key] = existing + "," + string.Join(",", values.Select(QuoteIfNeeded));
+            headers[key] = existing + "," + string.Join(',', values.Select(QuoteIfNeeded));
         }
     }
 

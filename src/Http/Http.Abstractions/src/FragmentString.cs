@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+
 namespace Microsoft.AspNetCore.Http;
 
 /// <summary>
 /// Provides correct handling for FragmentString value when needed to generate a URI string
 /// </summary>
+[DebuggerDisplay("{Value}")]
 public readonly struct FragmentString : IEquatable<FragmentString>
 {
     /// <summary>
@@ -125,7 +128,7 @@ public readonly struct FragmentString : IEquatable<FragmentString>
         {
             return !HasValue;
         }
-        return obj is FragmentString && Equals((FragmentString)obj);
+        return obj is FragmentString value && Equals(value);
     }
 
     /// <summary>

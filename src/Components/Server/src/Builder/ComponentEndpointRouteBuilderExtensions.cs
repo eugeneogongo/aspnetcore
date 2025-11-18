@@ -2,12 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.Components.Server;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.AspNetCore.StaticFiles;
-using Microsoft.Extensions.FileProviders;
 
 namespace Microsoft.AspNetCore.Builder;
 
@@ -88,34 +85,6 @@ public static class ComponentEndpointRouteBuilderExtensions
             endpoints.CreateApplicationBuilder().UseMiddleware<CircuitJavaScriptInitializationMiddleware>().Build())
             .WithDisplayName("Blazor initializers");
 
-        var blazorEndpoint = GetBlazorEndpoint(endpoints);
-
-        return new ComponentEndpointConventionBuilder(hubEndpoint, disconnectEndpoint, jsInitializersEndpoint, blazorEndpoint);
-    }
-
-    private static IEndpointConventionBuilder GetBlazorEndpoint(IEndpointRouteBuilder endpoints)
-    {
-        var options = new StaticFileOptions
-        {
-            FileProvider = new ManifestEmbeddedFileProvider(typeof(ComponentEndpointRouteBuilderExtensions).Assembly),
-            OnPrepareResponse = CacheHeaderSettings.SetCacheHeaders
-        };
-
-        var app = endpoints.CreateApplicationBuilder();
-        app.Use(next => context =>
-        {
-            // Set endpoint to null so the static files middleware will handle the request.
-            context.SetEndpoint(null);
-
-            return next(context);
-        });
-        app.UseStaticFiles(options);
-
-        var blazorEndpoint = endpoints.Map("/_framework/blazor.server.js", app.Build())
-            .WithDisplayName("Blazor static files");
-
-        blazorEndpoint.Add((builder) => ((RouteEndpointBuilder)builder).Order = int.MinValue);
-
-        return blazorEndpoint;
+        return new ComponentEndpointConventionBuilder(hubEndpoint, disconnectEndpoint, jsInitializersEndpoint);
     }
 }

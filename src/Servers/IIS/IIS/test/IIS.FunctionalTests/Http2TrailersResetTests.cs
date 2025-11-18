@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Server.IntegrationTesting.Common;
 using Microsoft.AspNetCore.Server.IntegrationTesting.IIS;
 using Microsoft.AspNetCore.Server;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http2;
-using Microsoft.AspNetCore.Testing;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
@@ -398,6 +398,7 @@ public class Http2TrailerResetTests : FunctionalTestsBase
     [ConditionalFact]
     [RequiresNewHandler]
     [MinimumOSVersion(OperatingSystems.Windows, WindowsVersionForTrailers)]
+    [QuarantinedTest("https://github.com/dotnet/aspnetcore/issues/61056")]
     public async Task Reset_DuringRequestBody_Resets()
     {
         await new HostBuilder()

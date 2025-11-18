@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.Hosting.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -20,6 +21,7 @@ namespace Microsoft.AspNetCore.Hosting;
 /// <summary>
 /// A builder for <see cref="IWebHost"/>
 /// </summary>
+[Obsolete("WebHostBuilder is deprecated in favor of HostBuilder and WebApplicationBuilder. For more information, visit https://aka.ms/aspnet/deprecate/004.", DiagnosticId = "ASPDEPR004", UrlFormat = Obsoletions.AspNetCoreDeprecate004Url)]
 public class WebHostBuilder : IWebHostBuilder
 {
     private readonly HostingEnvironment _hostingEnvironment;
@@ -179,7 +181,7 @@ public class WebHostBuilder : IWebHostBuilder
             var assemblyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var assemblyName in _options.GetFinalHostingStartupAssemblies())
             {
-                if (!assemblyNames.Add(assemblyName))
+                if (!assemblyNames.Add(assemblyName) && logger.IsEnabled(LogLevel.Warning))
                 {
                     logger.LogWarning($"The assembly {assemblyName} was specified multiple times. Hosting startup assemblies should only be specified once.");
                 }
@@ -293,6 +295,9 @@ public class WebHostBuilder : IWebHostBuilder
         services.AddScoped<IMiddlewareFactory, MiddlewareFactory>();
         services.AddOptions();
         services.AddLogging();
+
+        services.AddMetrics();
+        services.TryAddSingleton<HostingMetrics>();
 
         services.AddTransient<IServiceProviderFactory<IServiceCollection>, DefaultServiceProviderFactory>();
 

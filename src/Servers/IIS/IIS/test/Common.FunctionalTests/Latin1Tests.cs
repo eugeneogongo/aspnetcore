@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Server.IIS.FunctionalTests.Utilities;
 using Microsoft.AspNetCore.Server.IntegrationTesting;
 using Microsoft.AspNetCore.Server.IntegrationTesting.IIS;
-using Microsoft.AspNetCore.Testing;
+using Microsoft.AspNetCore.InternalTesting;
 using Xunit;
 
 #if !IIS_FUNCTIONALS
@@ -35,6 +35,7 @@ public class Latin1Tests : IISFunctionalTestBase
 
     [ConditionalFact]
     [RequiresNewHandler]
+    [QuarantinedTest("https://github.com/dotnet/aspnetcore/issues/61055")]
     public async Task Latin1Works()
     {
         var deploymentParameters = Fixture.GetBaseDeploymentParameters();

@@ -102,7 +102,7 @@ public sealed class HostMatcherPolicy : MatcherPolicy, IEndpointComparerPolicy, 
                     host = host.Slice(0, pivot);
                 }
 
-                if (host == null || MemoryExtensions.Equals(host, WildcardHost, StringComparison.OrdinalIgnoreCase))
+                if (host.Length == 0 || MemoryExtensions.Equals(host, WildcardHost, StringComparison.OrdinalIgnoreCase))
                 {
                     // Can match any host
                 }
@@ -154,25 +154,27 @@ public sealed class HostMatcherPolicy : MatcherPolicy, IEndpointComparerPolicy, 
             return EdgeKey.WildcardEdgeKey;
         }
 
-        var hostParts = host.Split(':');
-        if (hostParts.Length == 1)
+        Span<Range> hostParts = stackalloc Range[3];
+        var hostSpan = host.AsSpan();
+        var length = hostSpan.Split(hostParts, ':');
+        if (length == 1)
         {
-            if (!string.IsNullOrEmpty(hostParts[0]))
+            if (!hostSpan[hostParts[0]].IsEmpty)
             {
-                return new EdgeKey(hostParts[0], null);
+                return new EdgeKey(hostSpan[hostParts[0]].ToString(), null);
             }
         }
-        if (hostParts.Length == 2)
+        if (length == 2)
         {
-            if (!string.IsNullOrEmpty(hostParts[0]))
+            if (!hostSpan[hostParts[0]].IsEmpty)
             {
-                if (int.TryParse(hostParts[1], out var port))
+                if (int.TryParse(hostSpan[hostParts[1]], out var port))
                 {
-                    return new EdgeKey(hostParts[0], port);
+                    return new EdgeKey(hostSpan[hostParts[0]].ToString(), port);
                 }
-                else if (string.Equals(hostParts[1], WildcardHost, StringComparison.Ordinal))
+                else if (hostSpan[hostParts[1]].Equals(WildcardHost, StringComparison.Ordinal))
                 {
-                    return new EdgeKey(hostParts[0], null);
+                    return new EdgeKey(hostSpan[hostParts[0]].ToString(), null);
                 }
             }
         }
@@ -197,8 +199,8 @@ public sealed class HostMatcherPolicy : MatcherPolicy, IEndpointComparerPolicy, 
         for (var i = 0; i < endpoints.Count; i++)
         {
             var endpoint = endpoints[i];
-            var hosts = endpoint.Metadata.GetMetadata<IHostMetadata>()?.Hosts.Select(CreateEdgeKey).ToArray();
-            if (hosts == null || hosts.Length == 0)
+            var hosts = GetEdgeKeys(endpoint);
+            if (hosts is null || hosts.Length == 0)
             {
                 hosts = new[] { EdgeKey.WildcardEdgeKey };
             }
@@ -219,8 +221,8 @@ public sealed class HostMatcherPolicy : MatcherPolicy, IEndpointComparerPolicy, 
         {
             var endpoint = endpoints[i];
 
-            var endpointKeys = endpoint.Metadata.GetMetadata<IHostMetadata>()?.Hosts.Select(CreateEdgeKey).ToArray() ?? Array.Empty<EdgeKey>();
-            if (endpointKeys.Length == 0)
+            var endpointKeys = GetEdgeKeys(endpoint);
+            if (endpointKeys is null || endpointKeys.Length == 0)
             {
                 // OK this means that this endpoint matches *all* hosts.
                 // So, loop and add it to all states.
@@ -257,9 +259,28 @@ public sealed class HostMatcherPolicy : MatcherPolicy, IEndpointComparerPolicy, 
             }
         }
 
-        return edges
-            .Select(kvp => new PolicyNodeEdge(kvp.Key, kvp.Value))
-            .ToArray();
+        var result = new PolicyNodeEdge[edges.Count];
+        var index = 0;
+        foreach (var kvp in edges)
+        {
+            result[index] = new PolicyNodeEdge(kvp.Key, kvp.Value);
+            index++;
+        }
+        return result;
+    }
+
+    private static EdgeKey[]? GetEdgeKeys(Endpoint endpoint)
+    {
+        List<EdgeKey>? result = null;
+        var hostMetadata = endpoint.Metadata.GetMetadata<IHostMetadata>();
+        if (hostMetadata is not null)
+        {
+            foreach (var host in hostMetadata.Hosts)
+            {
+                (result ??= new()).Add(CreateEdgeKey(host));
+            }
+        }
+        return result?.ToArray();
     }
 
     /// <inheritdoc />
@@ -269,10 +290,13 @@ public sealed class HostMatcherPolicy : MatcherPolicy, IEndpointComparerPolicy, 
 
         // Since our 'edges' can have wildcards, we do a sort based on how wildcard-ey they
         // are then then execute them in linear order.
-        var ordered = edges
-            .Select(e => (host: (EdgeKey)e.State, destination: e.Destination))
-            .OrderBy(e => GetScore(e.host))
-            .ToArray();
+        var ordered = new (EdgeKey host, int destination)[edges.Count];
+        for (var i = 0; i < edges.Count; i++)
+        {
+            PolicyJumpTableEdge e = edges[i];
+            ordered[i] = (host: (EdgeKey)e.State, destination: e.Destination);
+        }
+        Array.Sort(ordered, static (left, right) => GetScore(left.host).CompareTo(GetScore(right.host)));
 
         return new HostPolicyJumpTable(exitDestination, ordered);
     }

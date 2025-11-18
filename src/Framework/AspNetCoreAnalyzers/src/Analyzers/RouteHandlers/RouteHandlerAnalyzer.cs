@@ -13,6 +13,8 @@ using Microsoft.CodeAnalysis.Operations;
 
 namespace Microsoft.AspNetCore.Analyzers.RouteHandlers;
 
+using WellKnownType = WellKnownTypeData.WellKnownType;
+
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public partial class RouteHandlerAnalyzer : DiagnosticAnalyzer
 {
@@ -23,9 +25,10 @@ public partial class RouteHandlerAnalyzer : DiagnosticAnalyzer
         DiagnosticDescriptors.DoNotReturnActionResultsFromRouteHandlers,
         DiagnosticDescriptors.DetectMisplacedLambdaAttribute,
         DiagnosticDescriptors.DetectMismatchedParameterOptionality,
-        DiagnosticDescriptors.RouteParameterComplexTypeIsNotParsableOrBindable,
+        DiagnosticDescriptors.RouteParameterComplexTypeIsNotParsable,
         DiagnosticDescriptors.BindAsyncSignatureMustReturnValueTaskOfT,
-        DiagnosticDescriptors.AmbiguousRouteHandlerRoute
+        DiagnosticDescriptors.AmbiguousRouteHandlerRoute,
+        DiagnosticDescriptors.AtMostOneFromBodyAttribute
     );
 
     public override void Initialize(AnalysisContext context)
@@ -103,17 +106,19 @@ public partial class RouteHandlerAnalyzer : DiagnosticAnalyzer
                 {
                     var lambda = (IAnonymousFunctionOperation)delegateCreation.Target;
                     DisallowMvcBindArgumentsOnParameters(in context, wellKnownTypes, invocation, lambda.Symbol);
-                    DisallowNonParsableComplexTypesOnParameters(in context, routeUsage, lambda.Symbol);
+                    DisallowNonParsableComplexTypesOnParameters(in context, wellKnownTypes, routeUsage, lambda.Symbol);
                     DisallowReturningActionResultFromMapMethods(in context, wellKnownTypes, invocation, lambda, delegateCreation.Syntax);
                     DetectMisplacedLambdaAttribute(context, lambda);
                     DetectMismatchedParameterOptionality(in context, routeUsage, lambda.Symbol);
+                    AtMostOneFromBodyAttribute(in context, wellKnownTypes, lambda.Symbol);
                 }
                 else if (delegateCreation.Target.Kind == OperationKind.MethodReference)
                 {
                     var methodReference = (IMethodReferenceOperation)delegateCreation.Target;
                     DisallowMvcBindArgumentsOnParameters(in context, wellKnownTypes, invocation, methodReference.Method);
-                    DisallowNonParsableComplexTypesOnParameters(in context, routeUsage, methodReference.Method);
+                    DisallowNonParsableComplexTypesOnParameters(in context, wellKnownTypes, routeUsage, methodReference.Method);
                     DetectMismatchedParameterOptionality(in context, routeUsage, methodReference.Method);
+                    AtMostOneFromBodyAttribute(in context, wellKnownTypes, methodReference.Method);
 
                     var foundMethodReferenceBody = false;
                     if (!methodReference.Method.DeclaringSyntaxReferences.IsEmpty)
@@ -218,7 +223,7 @@ public partial class RouteHandlerAnalyzer : DiagnosticAnalyzer
         public static MapOperation Create(IInvocationOperation operation, RouteUsageModel routeUsageModel)
         {
             IOperation? builder = null;
-                
+
             var builderArgument = operation.Arguments.SingleOrDefault(a => a.Parameter?.Ordinal == 0);
             if (builderArgument != null)
             {

@@ -27,8 +27,13 @@ namespace System.Net.Http.HPack
             DynamicTableSizeUpdate
         }
 
+        // https://datatracker.ietf.org/doc/html/rfc9113#name-defined-settings
+        // Initial value for SETTINGS_HEADER_TABLE_SIZE is 4,096 octets.
         public const int DefaultHeaderTableSize = 4096;
-        public const int DefaultStringOctetsSize = 4096;
+
+        // This is the initial size. Buffers will be dynamically resized as needed.
+        public const int DefaultStringOctetsSize = 32;
+
         public const int DefaultMaxHeadersLength = 64 * 1024;
 
         // http://httpwg.org/specs/rfc7541.html#rfc.section.6.1
@@ -187,12 +192,11 @@ namespace System.Net.Http.HPack
             // will no longer be valid.
             if (_headerNameRange != null)
             {
-                EnsureStringCapacity(ref _headerNameOctets);
+                EnsureStringCapacity(ref _headerNameOctets, _headerNameLength);
                 _headerName = _headerNameOctets;
 
                 ReadOnlySpan<byte> headerBytes = data.Slice(_headerNameRange.GetValueOrDefault().start, _headerNameRange.GetValueOrDefault().length);
                 headerBytes.CopyTo(_headerName);
-                _headerNameLength = headerBytes.Length;
                 _headerNameRange = null;
             }
         }
@@ -427,6 +431,7 @@ namespace System.Net.Http.HPack
             {
                 // Fast path. Store the range rather than copying.
                 _headerNameRange = (start: currentIndex, count);
+                _headerNameLength = _stringLength;
                 currentIndex += count;
 
                 _state = State.HeaderValueLength;
@@ -621,11 +626,12 @@ namespace System.Net.Http.HPack
             _state = nextState;
         }
 
-        private void EnsureStringCapacity(ref byte[] dst)
+        private void EnsureStringCapacity(ref byte[] dst, int stringLength = -1)
         {
-            if (dst.Length < _stringLength)
+            stringLength = stringLength >= 0 ? stringLength : _stringLength;
+            if (dst.Length < stringLength)
             {
-                dst = new byte[Math.Max(_stringLength, Math.Min(dst.Length * 2, _maxHeadersLength))];
+                dst = new byte[Math.Max(stringLength, Math.Min(dst.Length * 2, _maxHeadersLength))];
             }
         }
 
@@ -669,7 +675,7 @@ namespace System.Net.Http.HPack
                 throw new HPackDecodingException(SR.Format(SR.net_http_hpack_large_table_size_update, size, _maxDynamicTableSize));
             }
 
-            _dynamicTable.Resize(size);
+            _dynamicTable.UpdateMaxSize(size);
         }
     }
 }

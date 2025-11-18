@@ -46,7 +46,7 @@ public static class WebHostBuilderExtensions
         {
             services.AddSingleton<IStartup>(sp =>
             {
-                return new DelegateStartup(sp.GetRequiredService<IServiceProviderFactory<IServiceCollection>>(), (app => configureApp(app)));
+                return new DelegateStartup(sp.GetRequiredService<IServiceProviderFactory<IServiceCollection>>(), configureApp);
             });
         });
     }
@@ -86,7 +86,7 @@ public static class WebHostBuilderExtensions
     /// <param name="hostBuilder">The <see cref="IWebHostBuilder"/> to configure.</param>
     /// <param name="startupFactory">A delegate that specifies a factory for the startup class.</param>
     /// <returns>The <see cref="IWebHostBuilder"/>.</returns>
-    /// <remarks>When using the il linker, all public methods of <typeparamref name="TStartup"/> are preserved. This should match the Startup type directly (and not a base type).</remarks>
+    /// <remarks>When in a trimmed app, all public methods of <typeparamref name="TStartup"/> are preserved. This should match the Startup type directly (and not a base type).</remarks>
     public static IWebHostBuilder UseStartup<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TStartup>(this IWebHostBuilder hostBuilder, Func<WebHostBuilderContext, TStartup> startupFactory) where TStartup : class
     {
         ArgumentNullException.ThrowIfNull(startupFactory);
@@ -144,21 +144,19 @@ public static class WebHostBuilderExtensions
 
         hostBuilder.UseSetting(WebHostDefaults.ApplicationKey, startupAssemblyName);
 
-        var state = new UseStartupState(startupType);
-
         return hostBuilder
             .ConfigureServices(services =>
             {
-                if (typeof(IStartup).IsAssignableFrom(state.StartupType))
+                if (typeof(IStartup).IsAssignableFrom(startupType))
                 {
-                    services.AddSingleton(typeof(IStartup), state.StartupType);
+                    services.AddSingleton(typeof(IStartup), startupType);
                 }
                 else
                 {
                     services.AddSingleton(typeof(IStartup), sp =>
                     {
                         var hostingEnvironment = sp.GetRequiredService<IHostEnvironment>();
-                        return new ConventionBasedStartup(StartupLoader.LoadMethods(sp, state.StartupType, hostingEnvironment.EnvironmentName));
+                        return new ConventionBasedStartup(StartupLoader.LoadMethods(sp, startupType, hostingEnvironment.EnvironmentName));
                     });
                 }
             });

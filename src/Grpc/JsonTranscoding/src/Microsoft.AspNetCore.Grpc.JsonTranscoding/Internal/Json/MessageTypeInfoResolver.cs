@@ -1,9 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Google.Protobuf;
 using Google.Protobuf.Reflection;
@@ -61,7 +62,7 @@ internal sealed class MessageTypeInfoResolver : IJsonTypeInfoResolver
 
     private bool IsStandardMessage(Type type, [NotNullWhen(true)] out MessageDescriptor? messageDescriptor)
     {
-        if (!typeof(IMessage).IsAssignableFrom(type))
+        if (type.IsInterface || !typeof(IMessage).IsAssignableFrom(type))
         {
             messageDescriptor = null;
             return false;
@@ -92,57 +93,59 @@ internal sealed class MessageTypeInfoResolver : IJsonTypeInfoResolver
             JsonConverterHelper.GetFieldType(field),
             name);
 
-        // Properties that don't have this flag set are only used to deserialize incoming JSON.
-        if (isSerializable)
+        // A property with a wrapper type is usually the underlying type on the DTO.
+        // For example, a field of type google.protobuf.StringValue will have a property of type string.
+        // However, the wrapper type is exposed if someone manually creates a DTO with it, or there is a problem
+        // detecting wrapper type in code generation. For example, https://github.com/protocolbuffers/protobuf/issues/22744
+        FieldDescriptor? wrapperTypeValueField = null;
+        if (field.FieldType == FieldType.Message && ServiceDescriptorHelpers.IsWrapperType(field.MessageType))
         {
-            propertyInfo.ShouldSerialize = (o, v) =>
+            var property = field.ContainingType.ClrType.GetProperty(field.PropertyName);
+
+            // Check if the property type is the same as the field type. This means the property is StringValue, et al,
+            // and additional conversion is required.
+            if (property != null && property.PropertyType == field.MessageType.ClrType)
             {
-                return JsonConverterHelper.ShouldFormatFieldValue((IMessage)o, field, v, !_context.Settings.IgnoreDefaultValues);
-            };
-            propertyInfo.Get = (o) =>
-            {
-                return field.Accessor.GetValue((IMessage)o);
-            };
+                wrapperTypeValueField = field.MessageType.FindFieldByName("value");
+            }
         }
 
-        propertyInfo.Set = GetSetMethod(field);
+        propertyInfo.ShouldSerialize = (o, v) =>
+        {
+            // Properties that don't have this flag set are only used to deserialize incoming JSON.
+            if (!isSerializable)
+            {
+                return false;
+            }
+            return JsonConverterHelper.ShouldFormatFieldValue((IMessage)o, field, v, !_context.Settings.IgnoreDefaultValues);
+        };
+        propertyInfo.Get = (o) =>
+        {
+            var value = field.Accessor.GetValue((IMessage)o);
+            if (wrapperTypeValueField != null && value is IMessage wrapperMessage)
+            {
+                return wrapperTypeValueField.Accessor.GetValue(wrapperMessage);
+            }
+
+            return value;
+        };
+
+        if (field.IsMap || field.IsRepeated)
+        {
+            // Collection properties are read-only. Populate values into existing collection.
+            propertyInfo.ObjectCreationHandling = JsonObjectCreationHandling.Populate;
+        }
+        else
+        {
+            propertyInfo.Set = GetSetMethod(field, wrapperTypeValueField);
+        }
 
         return propertyInfo;
     }
 
-    private static Action<object, object?> GetSetMethod(FieldDescriptor field)
+    private static Action<object, object?> GetSetMethod(FieldDescriptor field, FieldDescriptor? wrapperTypeValueField)
     {
-        if (field.IsMap)
-        {
-            return (o, v) =>
-            {
-                // The serializer creates a collection. Copy contents to collection on read-only property.
-                // An extra collection is being created here that's then thrown away.
-                // This will be removed once S.T.J supports deserializing onto a read-only property.
-                // https://github.com/dotnet/runtime/issues/30258
-                var existingValue = (IDictionary)field.Accessor.GetValue((IMessage)o);
-                foreach (DictionaryEntry item in (IDictionary)v!)
-                {
-                    existingValue[item.Key] = item.Value;
-                }
-            };
-        }
-
-        if (field.IsRepeated)
-        {
-            return (o, v) =>
-            {
-                // The serializer creates a collection. Copy contents to collection on read-only property.
-                // An extra collection is being created here that's then thrown away.
-                // This will be removed once S.T.J supports deserializing onto a read-only property.
-                // https://github.com/dotnet/runtime/issues/30258
-                var existingValue = (IList)field.Accessor.GetValue((IMessage)o);
-                foreach (var item in (IList)v!)
-                {
-                    existingValue.Add(item);
-                }
-            };
-        }
+        Debug.Assert(!field.IsRepeated && !field.IsMap, "Collections shouldn't have a setter.");
 
         if (field.RealContainingOneof != null)
         {
@@ -154,22 +157,48 @@ internal sealed class MessageTypeInfoResolver : IJsonTypeInfoResolver
                     throw new InvalidOperationException($"Multiple values specified for oneof {field.RealContainingOneof.Name}.");
                 }
 
-                field.Accessor.SetValue((IMessage)o, v);
+                SetFieldValue(field, wrapperTypeValueField, (IMessage)o, v);
             };
         }
 
         return (o, v) =>
         {
-            field.Accessor.SetValue((IMessage)o, v);
+            SetFieldValue(field, wrapperTypeValueField, (IMessage)o, v);
         };
+
+        static void SetFieldValue(FieldDescriptor field, FieldDescriptor? wrapperTypeValueField, IMessage m, object? v)
+        {
+            if (v != null)
+            {
+                // This field exposes a wrapper type. Need to create a wrapper instance and set the value on it.
+                if (wrapperTypeValueField != null && v is not IMessage)
+                {
+                    var wrapper = (IMessage)Activator.CreateInstance(field.MessageType.ClrType)!;
+                    wrapperTypeValueField.Accessor.SetValue(wrapper, v);
+                    v = wrapper;
+                }
+
+                field.Accessor.SetValue(m, v);
+            }
+            else
+            {
+                field.Accessor.Clear(m);
+            }
+        }
     }
 
     private static Dictionary<string, FieldDescriptor> CreateJsonFieldMap(IList<FieldDescriptor> fields)
     {
         var map = new Dictionary<string, FieldDescriptor>();
+        // The ordering is important here: JsonName takes priority over Name,
+        // which means we need to put JsonName values in the map after *all*
+        // Name keys have been added. See https://github.com/protocolbuffers/protobuf/issues/11987
         foreach (var field in fields)
         {
             map[field.Name] = field;
+        }
+        foreach (var field in fields)
+        {
             map[field.JsonName] = field;
         }
         return map;

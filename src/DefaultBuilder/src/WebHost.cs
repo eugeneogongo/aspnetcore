@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,6 +22,7 @@ namespace Microsoft.AspNetCore;
 /// <summary>
 /// Provides convenience methods for creating instances of <see cref="IWebHost"/> and <see cref="IWebHostBuilder"/> with pre-configured defaults.
 /// </summary>
+[Obsolete("WebHost is obsolete. Use HostBuilder or WebApplicationBuilder instead. For more information, visit https://aka.ms/aspnet/deprecate/008.", DiagnosticId = "ASPDEPR008", UrlFormat = Obsoletions.AspNetCoreDeprecate008Url)]
 public static class WebHost
 {
     /// <summary>
@@ -153,7 +156,9 @@ public static class WebHost
     /// <returns>The initialized <see cref="IWebHostBuilder"/>.</returns>
     public static IWebHostBuilder CreateDefaultBuilder(string[] args)
     {
+#pragma warning disable ASPDEPR004 // Type or member is obsolete
         var builder = new WebHostBuilder();
+#pragma warning restore ASPDEPR004 // Type or member is obsolete
 
         if (string.IsNullOrEmpty(builder.GetSetting(WebHostDefaults.ContentRootKey)))
         {
@@ -222,11 +227,32 @@ public static class WebHost
                 StaticWebAssetsLoader.UseStaticWebAssets(ctx.HostingEnvironment, ctx.Configuration);
             }
         });
-        builder.UseKestrel((builderContext, options) =>
-        {
-            options.Configure(builderContext.Configuration.GetSection("Kestrel"), reloadOnChange: true);
-        })
-        .ConfigureServices((hostingContext, services) =>
+
+        ConfigureWebDefaultsWorker(
+            builder.UseKestrel(ConfigureKestrel),
+            services =>
+            {
+                services.AddRouting();
+            });
+
+        builder
+            .UseIIS()
+            .UseIISIntegration();
+    }
+
+    internal static void ConfigureWebDefaultsSlim(IWebHostBuilder builder)
+    {
+        ConfigureWebDefaultsWorker(builder.UseKestrelCore().ConfigureKestrel(ConfigureKestrel), configureRouting: null);
+    }
+
+    private static void ConfigureKestrel(WebHostBuilderContext builderContext, KestrelServerOptions options)
+    {
+        options.Configure(builderContext.Configuration.GetSection("Kestrel"), reloadOnChange: true);
+    }
+
+    private static void ConfigureWebDefaultsWorker(IWebHostBuilder builder, Action<IServiceCollection>? configureRouting)
+    {
+        builder.ConfigureServices((hostingContext, services) =>
         {
             // Fallback
             services.PostConfigure<HostFilteringOptions>(options =>
@@ -247,10 +273,18 @@ public static class WebHost
             services.AddTransient<IStartupFilter, ForwardedHeadersStartupFilter>();
             services.AddTransient<IConfigureOptions<ForwardedHeadersOptions>, ForwardedHeadersOptionsSetup>();
 
-            services.AddRouting();
-        })
-        .UseIIS()
-        .UseIISIntegration();
+            // Provide a way for the default host builder to configure routing. This probably means calling AddRouting.
+            // A lambda is used here because we don't want to reference AddRouting directly because of trimming.
+            // This avoids the overhead of calling AddRoutingCore multiple times on app startup.
+            if (configureRouting == null)
+            {
+                services.AddRoutingCore();
+            }
+            else
+            {
+                configureRouting(services);
+            }
+        });
     }
 
     /// <summary>

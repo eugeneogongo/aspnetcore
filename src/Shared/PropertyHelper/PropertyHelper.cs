@@ -42,8 +42,6 @@ internal sealed class PropertyHelper
 
     private static readonly ConcurrentDictionary<Type, PropertyHelper[]> VisiblePropertiesCache = new();
 
-    private static readonly Type IsByRefLikeAttribute = typeof(System.Runtime.CompilerServices.IsByRefLikeAttribute);
-
     private Action<object, object?>? _valueSetter;
     private Func<object, object?>? _valueGetter;
 
@@ -214,8 +212,6 @@ internal sealed class PropertyHelper
         // MakeGenericMethod + value type requires IsDynamicCodeSupported to be true.
         if (RuntimeFeature.IsDynamicCodeSupported)
         {
-            // TODO: Remove disable when https://github.com/dotnet/linker/issues/2715 is complete.
-#pragma warning disable IL3050 // Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.
             // Instance methods in the CLR can be turned into static methods where the first parameter
             // is open over "target". This parameter is always passed by reference, so we have a code
             // path for value types and a code path for reference types.
@@ -235,7 +231,6 @@ internal sealed class PropertyHelper
                     getMethod,
                     propertyGetterWrapperMethod);
             }
-#pragma warning restore IL3050 // Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.
         }
         else
         {
@@ -289,8 +284,6 @@ internal sealed class PropertyHelper
         // MakeGenericMethod + value type requires IsDynamicCodeSupported to be true.
         if (RuntimeFeature.IsDynamicCodeSupported)
         {
-            // TODO: Remove disable when https://github.com/dotnet/linker/issues/2715 is complete.
-#pragma warning disable IL3050 // Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.
             // Instance methods in the CLR can be turned into static methods where the first parameter
             // is open over "target". This parameter is always passed by reference, so we have a code
             // path for value types and a code path for reference types.
@@ -307,7 +300,6 @@ internal sealed class PropertyHelper
                     typeof(Action<object, object?>), propertySetterAsAction);
 
             return (Action<object, object?>)callPropertySetterDelegate;
-#pragma warning restore IL3050 // Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.
         }
         else
         {
@@ -552,23 +544,14 @@ internal sealed class PropertyHelper
             property.GetMethod.IsPublic &&
             !property.GetMethod.IsStatic &&
 
-            // PropertyHelper can't work with ref structs.
-            !IsRefStructProperty(property) &&
+            // PropertyHelper can't really interact with ref-struct properties since they can't be
+            // boxed and can't be used as generic types. We just ignore them.
+            //
+            // see: https://github.com/aspnet/Mvc/issues/8545
+            !property.PropertyType.IsByRefLike &&
 
             // Indexed properties are not useful (or valid) for grabbing properties off an object.
             property.GetMethod.GetParameters().Length == 0;
-    }
-
-    // PropertyHelper can't really interact with ref-struct properties since they can't be
-    // boxed and can't be used as generic types. We just ignore them.
-    //
-    // see: https://github.com/aspnet/Mvc/issues/8545
-    private static bool IsRefStructProperty(PropertyInfo property)
-    {
-        return
-            IsByRefLikeAttribute != null &&
-            property.PropertyType.IsValueType &&
-            property.PropertyType.IsDefined(IsByRefLikeAttribute);
     }
 
     internal static class MetadataUpdateHandler

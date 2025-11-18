@@ -36,16 +36,17 @@ public static class AuthenticationTokenExtensions
         {
             if (token.Name is null)
             {
-                throw new ArgumentNullException(nameof(tokens), "Token name cannot be null.");
+                throw new ArgumentException("Token name cannot be null for any token.", nameof(tokens));
             }
 
             // REVIEW: should probably check that there are no ; in the token name and throw or encode
             tokenNames.Add(token.Name);
             properties.Items[TokenKeyPrefix + token.Name] = token.Value;
         }
+
         if (tokenNames.Count > 0)
         {
-            properties.Items[TokenNamesKey] = string.Join(";", tokenNames.ToArray());
+            properties.Items[TokenNamesKey] = string.Join(';', tokenNames);
         }
     }
 
@@ -70,9 +71,9 @@ public static class AuthenticationTokenExtensions
     /// </summary>
     /// <param name="properties">The <see cref="AuthenticationProperties"/> to update.</param>
     /// <param name="tokenName">The token name.</param>
-    /// <param name="tokenValue">The token value.</param>
+    /// <param name="tokenValue">The token value. May be <c>null</c>.</param>
     /// <returns><see langword="true"/> if the token was updated, otherwise <see langword="false"/>.</returns>
-    public static bool UpdateTokenValue(this AuthenticationProperties properties, string tokenName, string tokenValue)
+    public static bool UpdateTokenValue(this AuthenticationProperties properties, string tokenName, string? tokenValue)
     {
         ArgumentNullException.ThrowIfNull(properties);
         ArgumentNullException.ThrowIfNull(tokenName);

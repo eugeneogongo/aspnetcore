@@ -123,13 +123,12 @@ public class CookieAuthenticationOptions : AuthenticationSchemeOptions
 
     /// <summary>
     /// <para>
-    /// Controls how much time the authentication ticket stored in the cookie will remain valid from the point it is created
+    /// Controls how much time the authentication ticket stored in the cookie will remain valid from the point it is created.
     /// The expiration information is stored in the protected cookie ticket. Because of that an expired cookie will be ignored
     /// even if it is passed to the server after the browser should have purged it.
     /// </para>
     /// <para>
-    /// This is separate from the value of <see cref="CookieOptions.Expires"/>, which specifies
-    /// how long the browser will keep the cookie.
+    /// This property should be used instead of <see cref="CookieBuilder.Expiration"/>, which is ignored.
     /// </para>
     /// </summary>
     public TimeSpan ExpireTimeSpan { get; set; }

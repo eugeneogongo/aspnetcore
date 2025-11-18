@@ -13,12 +13,12 @@ internal sealed class Http3PendingStream
 
     internal readonly Http3StreamContext Context;
     internal readonly long StreamId;
-    internal long StreamTimeoutTicks;
+    internal long StreamTimeoutTimestamp;
 
     public Http3PendingStream(Http3StreamContext context, long id)
     {
         Context = context;
-        StreamTimeoutTicks = default;
+        StreamTimeoutTimestamp = default;
         StreamId = id;
     }
 
@@ -51,7 +51,7 @@ internal sealed class Http3PendingStream
 
                 if (result.IsCanceled)
                 {
-                    throw new Exception();
+                    throw new OperationCanceledException("The read operation was canceled.");
                 }
 
                 var readableBuffer = result.Buffer;
@@ -60,8 +60,7 @@ internal sealed class Http3PendingStream
 
                 if (!readableBuffer.IsEmpty)
                 {
-                    var value = VariableLengthIntegerHelper.GetInteger(readableBuffer, out consumed, out _);
-                    if (value != -1)
+                    if (VariableLengthIntegerHelper.TryGetInteger(readableBuffer, out consumed, out var value))
                     {
                         if (!advanceOn.HasValue || value == (long)advanceOn)
                         {
@@ -95,7 +94,7 @@ internal sealed class Http3PendingStream
                 }
             }
 
-            StreamTimeoutTicks = default;
+            StreamTimeoutTimestamp = default;
         }
 
         return -1L;

@@ -2,24 +2,32 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
+using System.Buffers;
 using System.Diagnostics;
+using System.IO;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
+using Microsoft.AspNetCore.Connections.Abstractions;
 using Microsoft.AspNetCore.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using static System.IO.Pipelines.DuplexPipe;
 
 namespace Microsoft.AspNetCore.Http.Connections.Client.Internal;
 
-internal sealed partial class WebSocketsTransport : ITransport
+#pragma warning disable CA2252 // This API requires opting into preview features
+internal sealed partial class WebSocketsTransport : ITransport, IStatefulReconnectFeature
+#pragma warning restore CA2252 // This API requires opting into preview features
 {
     private WebSocket? _webSocket;
     private IDuplexPipe? _application;
@@ -29,9 +37,14 @@ internal sealed partial class WebSocketsTransport : ITransport
     private volatile bool _aborted;
     private readonly HttpConnectionOptions _httpConnectionOptions;
     private readonly HttpClient? _httpClient;
-    private readonly CancellationTokenSource _stopCts = new CancellationTokenSource();
+    private CancellationTokenSource _stopCts = default!;
+    private bool _useStatefulReconnect;
 
     private IDuplexPipe? _transport;
+    // Used for reconnect (when enabled) to determine if the close was ungraceful or not, reconnect only happens on ungraceful disconnect
+    // The assumption is that a graceful close was triggered purposefully by either the client or server and a reconnect shouldn't occur 
+    private bool _gracefulClose;
+    private Func<PipeWriter, Task>? _notifyOnReconnect;
 
     internal Task Running { get; private set; } = Task.CompletedTask;
 
@@ -39,9 +52,30 @@ internal sealed partial class WebSocketsTransport : ITransport
 
     public PipeWriter Output => _transport!.Output;
 
-    public WebSocketsTransport(HttpConnectionOptions httpConnectionOptions, ILoggerFactory loggerFactory, Func<Task<string?>> accessTokenProvider, HttpClient? httpClient)
+#pragma warning disable CA2252 // This API requires opting into preview features
+    public void OnReconnected(Func<PipeWriter, Task> notifyOnReconnect)
     {
-        _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<WebSocketsTransport>();
+        if (_notifyOnReconnect is null)
+        {
+            _notifyOnReconnect = notifyOnReconnect;
+        }
+        else
+        {
+            var localNotifyOnReconnect = _notifyOnReconnect;
+            _notifyOnReconnect = async writer =>
+            {
+                await localNotifyOnReconnect(writer).ConfigureAwait(false);
+                await notifyOnReconnect(writer).ConfigureAwait(false);
+            };
+        }
+    }
+#pragma warning restore CA2252 // This API requires opting into preview features
+
+    public WebSocketsTransport(HttpConnectionOptions httpConnectionOptions, ILoggerFactory loggerFactory, Func<Task<string?>> accessTokenProvider, HttpClient? httpClient,
+        bool useStatefulReconnect = false)
+    {
+        _useStatefulReconnect = useStatefulReconnect;
+        _logger = loggerFactory?.CreateLogger(typeof(WebSocketsTransport)) ?? NullLogger.Instance;
         _httpConnectionOptions = httpConnectionOptions ?? new HttpConnectionOptions();
 
         _closeTimeout = _httpConnectionOptions.CloseTimeout;
@@ -278,18 +312,29 @@ internal sealed partial class WebSocketsTransport : ITransport
 
         Log.StartedTransport(_logger);
 
-        // Create the pipe pair (Application's writer is connected to Transport's reader, and vice versa)
-        var pair = DuplexPipe.CreateConnectionPair(_httpConnectionOptions.TransportPipeOptions, _httpConnectionOptions.AppPipeOptions);
+        _stopCts = new CancellationTokenSource();
 
-        _transport = pair.Transport;
-        _application = pair.Application;
+        var isReconnect = false;
+
+        if (_transport is null)
+        {
+            // Create the pipe pair (Application's writer is connected to Transport's reader, and vice versa)
+            var pair = CreateConnectionPair(_httpConnectionOptions.TransportPipeOptions, _httpConnectionOptions.AppPipeOptions);
+
+            _transport = pair.Transport;
+            _application = pair.Application;
+        }
+        else
+        {
+            isReconnect = true;
+        }
 
         // TODO: Handle TCP connection errors
         // https://github.com/SignalR/SignalR/blob/1fba14fa3437e24c204dfaf8a18db3fce8acad3c/src/Microsoft.AspNet.SignalR.Core/Owin/WebSockets/WebSocketHandler.cs#L248-L251
-        Running = ProcessSocketAsync(_webSocket);
+        Running = ProcessSocketAsync(_webSocket, url, isReconnect);
     }
 
-    private async Task ProcessSocketAsync(WebSocket socket)
+    private async Task ProcessSocketAsync(WebSocket socket, Uri url, bool isReconnect)
     {
         Debug.Assert(_application != null);
 
@@ -297,7 +342,13 @@ internal sealed partial class WebSocketsTransport : ITransport
         {
             // Begin sending and receiving.
             var receiving = StartReceiving(socket);
-            var sending = StartSending(socket);
+            var sending = StartSending(socket, ignoreFirstCanceled: isReconnect);
+
+            if (isReconnect)
+            {
+                Debug.Assert(_notifyOnReconnect is not null);
+                await _notifyOnReconnect.Invoke(_transport!.Output).ConfigureAwait(false);
+            }
 
             // Wait for send or receive to complete
             var trigger = await Task.WhenAny(receiving, sending).ConfigureAwait(false);
@@ -321,6 +372,9 @@ internal sealed partial class WebSocketsTransport : ITransport
 
                     // Abort the websocket if we're stuck in a pending send to the client
                     socket.Abort();
+
+                    // Should not throw
+                    await sending.ConfigureAwait(false);
                 }
             }
             else
@@ -335,7 +389,43 @@ internal sealed partial class WebSocketsTransport : ITransport
                 socket.Abort();
 
                 // Cancel any pending flush so that we can quit
-                _application.Output.CancelPendingFlush();
+                if (_gracefulClose)
+                {
+                    _application.Output.CancelPendingFlush();
+                }
+
+                // Should not throw
+                await receiving.ConfigureAwait(false);
+            }
+        }
+
+        var cleanup = true;
+        try
+        {
+            if (!_gracefulClose && UpdateConnectionPair())
+            {
+                try
+                {
+                    await StartAsync(url, _webSocketMessageType == WebSocketMessageType.Binary ? TransferFormat.Binary : TransferFormat.Text,
+                        cancellationToken: default).ConfigureAwait(false);
+                    cleanup = false;
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("Reconnect attempt failed.", innerException: ex);
+                }
+            }
+        }
+        finally
+        {
+            if (cleanup)
+            {
+                // Pipes will usually already be completed.
+                // If stateful reconnect fails we want to make sure the Pipes are cleaned up.
+                // And in rare cases where the websocket is closing at the same time StopAsync is called
+                // It's possible a Pipe won't be completed so let's be safe and call Complete again.
+                _application.Output.Complete();
+                _application.Input.Complete();
             }
         }
     }
@@ -354,6 +444,7 @@ internal sealed partial class WebSocketsTransport : ITransport
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
+                    _gracefulClose = true;
                     Log.WebSocketClosed(_logger, socket.CloseStatus);
 
                     if (socket.CloseStatus != WebSocketCloseStatus.NormalClosure)
@@ -380,6 +471,7 @@ internal sealed partial class WebSocketsTransport : ITransport
                 // Need to check again for netstandard2.1 because a close can happen between a 0-byte read and the actual read
                 if (receiveResult.MessageType == WebSocketMessageType.Close)
                 {
+                    _gracefulClose = true;
                     Log.WebSocketClosed(_logger, socket.CloseStatus);
 
                     if (socket.CloseStatus != WebSocketCloseStatus.NormalClosure)
@@ -412,19 +504,30 @@ internal sealed partial class WebSocketsTransport : ITransport
         {
             if (!_aborted)
             {
-                _application.Output.Complete(ex);
+                if (_gracefulClose || !_useStatefulReconnect)
+                {
+                    _application.Output.Complete(ex);
+                }
+                else
+                {
+                    // only logging in this case because the other case gets the exception flowed to application code
+                    Log.ReceiveErrored(_logger, ex);
+                }
             }
         }
         finally
         {
             // We're done writing
-            _application.Output.Complete();
+            if (_gracefulClose || !_useStatefulReconnect)
+            {
+                _application.Output.Complete();
+            }
 
             Log.ReceiveStopped(_logger);
         }
     }
 
-    private async Task StartSending(WebSocket socket)
+    private async Task StartSending(WebSocket socket, bool ignoreFirstCanceled)
     {
         Debug.Assert(_application != null);
 
@@ -441,10 +544,12 @@ internal sealed partial class WebSocketsTransport : ITransport
 
                 try
                 {
-                    if (result.IsCanceled)
+                    if (result.IsCanceled && !ignoreFirstCanceled)
                     {
                         break;
                     }
+
+                    ignoreFirstCanceled = false;
 
                     if (!buffer.IsEmpty)
                     {
@@ -509,7 +614,17 @@ internal sealed partial class WebSocketsTransport : ITransport
                 }
             }
 
-            _application.Input.Complete();
+            if (_gracefulClose || !_useStatefulReconnect)
+            {
+                _application.Input.Complete();
+            }
+            else
+            {
+                if (error is not null)
+                {
+                    Log.SendErrored(_logger, error);
+                }
+            }
 
             Log.SendStopped(_logger);
         }
@@ -539,6 +654,7 @@ internal sealed partial class WebSocketsTransport : ITransport
 
     public async Task StopAsync()
     {
+        _gracefulClose = true;
         Log.TransportStopping(_logger);
 
         if (_application == null)
@@ -573,5 +689,41 @@ internal sealed partial class WebSocketsTransport : ITransport
         }
 
         Log.TransportStopped(_logger, null);
+    }
+
+    private bool UpdateConnectionPair()
+    {
+        lock (this)
+        {
+            // Lock and check _useStatefulReconnect, we want to swap the Pipe completely before DisableReconnect returns if there is contention there.
+            // The calling code will start completing the transport after DisableReconnect
+            // so we want to avoid any possibility of the new Pipe staying alive or even worse a new WebSocket connection being open when the transport
+            // might think it's closed.
+            if (_useStatefulReconnect == false)
+            {
+                return false;
+            }
+
+            var input = new Pipe(_httpConnectionOptions.TransportPipeOptions);
+
+            // Add new pipe for reading from and writing to transport from app code
+            var transportToApplication = new DuplexPipe(_transport!.Input, input.Writer);
+            var applicationToTransport = new DuplexPipe(input.Reader, _application!.Output);
+
+            _application = applicationToTransport;
+            _transport = transportToApplication;
+        }
+
+        return true;
+    }
+
+#pragma warning disable CA2252 // This API requires opting into preview features
+    public void DisableReconnect()
+#pragma warning restore CA2252 // This API requires opting into preview features
+    {
+        lock (this)
+        {
+            _useStatefulReconnect = false;
+        }
     }
 }

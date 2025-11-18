@@ -6,18 +6,19 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
+using Microsoft.AspNetCore.Connections.Abstractions;
 using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Http.Connections.Client.Internal;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Net.Http.Headers;
 
 namespace Microsoft.AspNetCore.Http.Connections.Client;
 
@@ -142,7 +143,7 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
 
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
 
-        _logger = _loggerFactory.CreateLogger<HttpConnection>();
+        _logger = _loggerFactory.CreateLogger(typeof(HttpConnection));
         _httpConnectionOptions = httpConnectionOptions;
 
         _url = _httpConnectionOptions.Url;
@@ -313,7 +314,7 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
             if (_httpConnectionOptions.Transports == HttpTransportType.WebSockets)
             {
                 Log.StartingTransport(_logger, _httpConnectionOptions.Transports, uri);
-                await StartTransport(uri, _httpConnectionOptions.Transports, transferFormat, cancellationToken).ConfigureAwait(false);
+                await StartTransport(uri, _httpConnectionOptions.Transports, transferFormat, cancellationToken, useStatefulReconnect: false).ConfigureAwait(false);
             }
             else
             {
@@ -349,6 +350,9 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
             {
                 throw new InvalidOperationException("Negotiate redirection limit exceeded.");
             }
+
+            // Set the final negotiated URI as the endpoint.
+            RemoteEndPoint = new UriEndPoint(Utils.CreateEndPointUri(uri));
 
             // This should only need to happen once
             var connectUrl = CreateConnectUrl(uri, negotiationResponse.ConnectionToken);
@@ -398,12 +402,17 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
                         // The negotiation response gets cleared in the fallback scenario.
                         if (negotiationResponse == null)
                         {
+                            // Temporary until other transports work
+                            _httpConnectionOptions.UseStatefulReconnect = transportType == HttpTransportType.WebSockets ? _httpConnectionOptions.UseStatefulReconnect : false;
                             negotiationResponse = await GetNegotiationResponseAsync(uri, cancellationToken).ConfigureAwait(false);
                             connectUrl = CreateConnectUrl(uri, negotiationResponse.ConnectionToken);
+
+                            // Set the final negotiated URI as the endpoint.
+                            RemoteEndPoint = new UriEndPoint(Utils.CreateEndPointUri(uri));
                         }
 
                         Log.StartingTransport(_logger, transportType, uri);
-                        await StartTransport(connectUrl, transportType, transferFormat, cancellationToken).ConfigureAwait(false);
+                        await StartTransport(connectUrl, transportType, transferFormat, cancellationToken, negotiationResponse.UseStatefulReconnect).ConfigureAwait(false);
                         break;
                     }
                 }
@@ -455,6 +464,11 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
                 uri = Utils.AppendQueryString(urlBuilder.Uri, $"negotiateVersion={_protocolVersionNumber}");
             }
 
+            if (_httpConnectionOptions.UseStatefulReconnect)
+            {
+                uri = Utils.AppendQueryString(uri, "useStatefulReconnect=true");
+            }
+
             using (var request = new HttpRequestMessage(HttpMethod.Post, uri))
             {
 #if NET5_0_OR_GREATER
@@ -462,6 +476,7 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
 #else
                 request.Properties.Add("IsNegotiate", true);
 #endif
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
 
                 // ResponseHeadersRead instructs SendAsync to return once headers are read
                 // rather than buffer the entire response. This gives a small perf boost.
@@ -476,7 +491,7 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
                     var negotiateResponse = NegotiateProtocol.ParseResponse(responseBuffer);
                     if (!string.IsNullOrEmpty(negotiateResponse.Error))
                     {
-                        throw new Exception(negotiateResponse.Error);
+                        throw new InvalidOperationException(negotiateResponse.Error);
                     }
                     Log.ConnectionEstablished(_logger, negotiateResponse.ConnectionId!);
                     return negotiateResponse;
@@ -500,10 +515,11 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
         return Utils.AppendQueryString(url, $"id={connectionId}");
     }
 
-    private async Task StartTransport(Uri connectUrl, HttpTransportType transportType, TransferFormat transferFormat, CancellationToken cancellationToken)
+    private async Task StartTransport(Uri connectUrl, HttpTransportType transportType, TransferFormat transferFormat,
+        CancellationToken cancellationToken, bool useStatefulReconnect)
     {
         // Construct the transport
-        var transport = _transportFactory.CreateTransport(transportType);
+        var transport = _transportFactory.CreateTransport(transportType, useStatefulReconnect);
 
         // Start the transport, giving it one end of the pipe
         try
@@ -523,6 +539,13 @@ public partial class HttpConnection : ConnectionContext, IConnectionInherentKeep
 
         // We successfully started, set the transport properties (we don't want to set these until the transport is definitely running).
         _transport = transport;
+
+        if (useStatefulReconnect && _transport is IStatefulReconnectFeature reconnectFeature)
+        {
+#pragma warning disable CA2252 // This API requires opting into preview features
+            Features.Set(reconnectFeature);
+#pragma warning restore CA2252 // This API requires opting into preview features
+        }
 
         Log.TransportStarted(_logger, transportType);
     }

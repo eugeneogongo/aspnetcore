@@ -16,6 +16,12 @@ Microsoft.AspNetCore.Mvc.RouteAttribute</Description>
     <PackageTags>aspnetcore;aspnetcoremvc</PackageTags>
     <IsPackable>false</IsPackable>
     <Nullable>enable</Nullable>
+    <!-- Mark this assembly as trimmable to support the LinkabilityChecker and trim warnings
+    for end-users but disable the analyzers since the entire assembly has not been made
+    trim/AoT compatible. -->
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <EnableAoTAnalyzer>false</EnableAoTAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,10 +37,10 @@ Microsoft.AspNetCore.Mvc.RouteAttribute</Description>
     <Compile Include="$(SharedSourceRoot)ResultsHelpers\*.cs" LinkBase="Shared" />
     <Compile Include="$(SharedSourceRoot)ProblemDetails\*.cs" LinkBase="Shared" />
     <Compile Include="$(SharedSourceRoot)MediaType\ReadOnlyMediaTypeHeaderValue.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedSourceRoot)MediaType\HttpTokenParsingRule.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedSourceRoot)RoutingMetadata\AcceptsMetadata.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedSourceRoot)TrimmingAppContextSwitches.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedSourceRoot)Json\JsonSerializerExtensions.cs" LinkBase="Shared"/>
+    <Compile Include="$(SharedSourceRoot)HttpParseResult.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedSourceRoot)HttpRuleParser.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedSourceRoot)Json\JsonSerializerExtensions.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedSourceRoot)Obsoletions.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>
@@ -60,10 +66,6 @@ Microsoft.AspNetCore.Mvc.RouteAttribute</Description>
   <ItemGroup Label="Sources packages">
     <Compile Include="$(SharedSourceRoot)ValueStopwatch\*.cs" />
     <Compile Include="$(SharedSourceRoot)ParameterDefaultValue\*.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Properties\ILLink.Substitutions.xml" LogicalName="ILLink.Substitutions.xml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -95,6 +97,7 @@ Microsoft.AspNetCore.Mvc.RouteAttribute</Description>
     <InternalsVisibleTo Include="Microsoft.AspNetCore.Mvc.ViewFeatures.Test" />
     <InternalsVisibleTo Include="Microsoft.AspNetCore.Mvc.Views.TestCommon" />
     <InternalsVisibleTo Include="Microsoft.AspNetCore.Mvc.Microbenchmarks" />
+    <InternalsVisibleTo Include="Microsoft.AspNetCore.OpenApi.Tests" />
     <InternalsVisibleTo Include="DynamicProxyGenAssembly2" Key="$(MoqPublicKey)" />
   </ItemGroup>
 </Project>

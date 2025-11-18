@@ -6,7 +6,7 @@ using System.Linq;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
-using Microsoft.AspNetCore.Testing;
+using Microsoft.AspNetCore.InternalTesting;
 using Newtonsoft.Json.Linq;
 using Xunit.Abstractions;
 
@@ -96,7 +96,7 @@ public class SharedFxTests
         Assert.Equal(_expectedTfm, (string)runtimeConfig["runtimeOptions"]["tfm"]);
         Assert.Equal("LatestPatch", (string)runtimeConfig["runtimeOptions"]["rollForward"]);
 
-        Assert.Equal(TestData.GetMicrosoftNETCoreAppPackageVersion(), (string)runtimeConfig["runtimeOptions"]["framework"]["version"]);
+        Assert.Equal(TestData.GetMicrosoftNETCoreAppVersion(), (string)runtimeConfig["runtimeOptions"]["framework"]["version"]);
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class SharedFxTests
             .Split(';', StringSplitOptions.RemoveEmptyEntries)
             .ToHashSet();
 
-        var versionStringWithoutPrereleaseTag = TestData.GetMicrosoftNETCoreAppPackageVersion().Split('-', 2)[0];
+        var versionStringWithoutPrereleaseTag = TestData.GetMicrosoftNETCoreAppVersion().Split('-', 2)[0];
         var version = Version.Parse(versionStringWithoutPrereleaseTag);
         var aspnetcoreVersionString = TestData.GetSharedFxVersion().Split('-', 2)[0];
         var aspnetcoreVersion = Version.Parse(aspnetcoreVersionString);
@@ -324,10 +324,8 @@ public class SharedFxTests
         var packageFolder = SkipOnHelixAttribute.OnHelix() ?
             Environment.GetEnvironmentVariable("HELIX_WORKITEM_ROOT") :
             TestData.GetPackagesFolder();
-        var sharedFxPath = Path.Combine(
-            packageFolder,
-            "Microsoft.AspNetCore.App.Runtime.win-x64." + TestData.GetSharedFxVersion() + ".nupkg");
-        AssertEx.FileExists(sharedFxPath);
+        var sharedFxPath = Directory.GetFiles(packageFolder, "Microsoft.AspNetCore.App.Runtime.*-*." + TestData.GetSharedFxVersion() + ".nupkg").FirstOrDefault();
+        Assert.NotNull(sharedFxPath);
 
         ZipArchive archive = ZipFile.OpenRead(sharedFxPath);
 

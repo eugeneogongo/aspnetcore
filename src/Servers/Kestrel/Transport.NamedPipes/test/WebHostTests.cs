@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Http;
@@ -14,8 +15,8 @@ using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Internal;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.AspNetCore.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,7 +25,116 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes.Tests;
 
 public class WebHostTests : LoggedTest
 {
+    [ConditionalFact]
+    [OSSkipCondition(OperatingSystems.Windows, SkipReason = "Test expects not supported error. Skip Windows because named pipes supports Windows.")]
+    public async Task ListenNamedPipeEndpoint_NonWindowsOperatingSystem_ErrorAsync()
+    {
+        // Arrange
+        var builder = new HostBuilder()
+            .ConfigureWebHost(webHostBuilder =>
+            {
+                webHostBuilder
+                    .UseKestrel(o =>
+                    {
+                        o.ListenNamedPipe("Pipename");
+                    })
+                    .Configure(app =>
+                    {
+                        app.Run(async context =>
+                        {
+                            await context.Response.WriteAsync("hello, world");
+                        });
+                    });
+            });
+
+        using var host = builder.Build();
+
+        // Act
+        var ex = await Assert.ThrowsAsync<PlatformNotSupportedException>(() => host.StartAsync());
+
+        // Assert
+        Assert.Equal("Named pipes transport requires a Windows operating system.", ex.Message);
+    }
+
     [Fact]
+    public async Task ListenNamedPipeEndpoint_CustomNamedPipeEndpointTransport()
+    {
+        // Arrange
+        var transport = new TestConnectionListenerFactory();
+
+        var builder = new HostBuilder()
+            .ConfigureWebHost(webHostBuilder =>
+            {
+                webHostBuilder
+                    .UseKestrel(o =>
+                    {
+                        o.ListenNamedPipe("Pipename");
+                    })
+                    .Configure(app =>
+                    {
+                        app.Run(async context =>
+                        {
+                            await context.Response.WriteAsync("hello, world");
+                        });
+                    });
+                webHostBuilder.ConfigureServices(services =>
+                 {
+                     services.AddSingleton<IConnectionListenerFactory>(transport);
+                 });
+            });
+
+        using var host = builder.Build();
+
+        // Act
+        await host.StartAsync();
+        await host.StopAsync();
+
+        // Assert
+        Assert.Equal("Pipename", transport.BoundEndPoint.PipeName);
+    }
+
+    private sealed class TestConnectionListenerFactory : IConnectionListenerFactory, IConnectionListenerFactorySelector
+    {
+        public NamedPipeEndPoint BoundEndPoint { get; private set; }
+
+        public ValueTask<IConnectionListener> BindAsync(EndPoint endpoint, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult<IConnectionListener>(new TestConnectionListener());
+        }
+
+        public bool CanBind(EndPoint endpoint)
+        {
+            if (endpoint is NamedPipeEndPoint ep)
+            {
+                BoundEndPoint = ep;
+                return true;
+            }
+            return false;
+        }
+
+        private sealed class TestConnectionListener : IConnectionListener
+        {
+            public EndPoint EndPoint { get; }
+
+            public ValueTask<ConnectionContext> AcceptAsync(CancellationToken cancellationToken = default)
+            {
+                return ValueTask.FromResult<ConnectionContext>(null);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                return default;
+            }
+
+            public ValueTask UnbindAsync(CancellationToken cancellationToken = default)
+            {
+                return default;
+            }
+        }
+    }
+
+    [ConditionalFact]
+    [NamedPipesSupported]
     public async Task ListenNamedPipeEndpoint_HelloWorld_ClientSuccess()
     {
         // Arrange
@@ -74,7 +184,7 @@ public class WebHostTests : LoggedTest
     }
 
     [ConditionalFact]
-    [OSSkipCondition(OperatingSystems.Linux | OperatingSystems.MacOSX, SkipReason = "Impersonation is only supported on Windows.")]
+    [NamedPipesSupported]
     public async Task ListenNamedPipeEndpoint_Impersonation_ClientSuccess()
     {
         AppDomain.CurrentDomain.SetPrincipalPolicy(PrincipalPolicy.WindowsPrincipal);
@@ -159,7 +269,134 @@ public class WebHostTests : LoggedTest
         }
     }
 
-    [Theory]
+    [ConditionalFact]
+    [NamedPipesSupported]
+    public async Task ListenNamedPipeEndpoint_Security_PerEndpointSecuritySettings()
+    {
+        AppDomain.CurrentDomain.SetPrincipalPolicy(PrincipalPolicy.WindowsPrincipal);
+
+        // Arrange
+        using var httpEventSource = new HttpEventSourceListener(LoggerFactory);
+        var defaultSecurityPipeName = NamedPipeTestHelpers.GetUniquePipeName();
+        var customSecurityPipeName = NamedPipeTestHelpers.GetUniquePipeName();
+
+        var builder = new HostBuilder()
+            .ConfigureWebHost(webHostBuilder =>
+            {
+                webHostBuilder
+                    .UseKestrel(o =>
+                    {
+                        o.ListenNamedPipe(defaultSecurityPipeName, listenOptions =>
+                        {
+                            listenOptions.Protocols = HttpProtocols.Http1;
+                        });
+                        o.ListenNamedPipe(customSecurityPipeName, listenOptions =>
+                        {
+                            listenOptions.Protocols = HttpProtocols.Http1;
+                        });
+                    })
+                    .UseNamedPipes(options =>
+                    {
+                        var defaultSecurity = new PipeSecurity();
+                        defaultSecurity.AddAccessRule(new PipeAccessRule("Users", PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
+
+                        options.PipeSecurity = defaultSecurity;
+                        options.CurrentUserOnly = false;
+                        options.CreateNamedPipeServerStream = (context) =>
+                        {
+                            if (context.NamedPipeEndPoint.PipeName == defaultSecurityPipeName)
+                            {
+                                return NamedPipeTransportOptions.CreateDefaultNamedPipeServerStream(context);
+                            }
+
+                            var allowSecurity = new PipeSecurity();
+                            allowSecurity.AddAccessRule(new PipeAccessRule("Users", PipeAccessRights.FullControl, AccessControlType.Allow));
+
+                            return NamedPipeServerStreamAcl.Create(
+                                context.NamedPipeEndPoint.PipeName,
+                                PipeDirection.InOut,
+                                NamedPipeServerStream.MaxAllowedServerInstances,
+                                PipeTransmissionMode.Byte,
+                                context.PipeOptions,
+                                inBufferSize: 0, // Buffer in System.IO.Pipelines
+                                outBufferSize: 0, // Buffer in System.IO.Pipelines
+                                allowSecurity);
+                        };
+                    })
+                    .Configure(app =>
+                    {
+                        app.Run(async context =>
+                        {
+                            var serverName = Thread.CurrentPrincipal.Identity.Name;
+
+                            var namedPipeStream = context.Features.Get<IConnectionNamedPipeFeature>().NamedPipe;
+
+                            var security = namedPipeStream.GetAccessControl();
+                            var rules = security.GetAccessRules(includeExplicit: true, includeInherited: false, typeof(SecurityIdentifier));
+
+                            context.Response.Headers.Add("X-PipeAccessRights", ((int)rules.OfType<PipeAccessRule>().Single().PipeAccessRights).ToString(CultureInfo.InvariantCulture));
+
+                            await context.Response.WriteAsync("hello, world");
+                        });
+                    });
+            })
+            .ConfigureServices(AddTestLogging);
+
+        using (var host = builder.Build())
+        {
+            await host.StartAsync().DefaultTimeout();
+
+            using (var client = CreateClient(defaultSecurityPipeName))
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1/")
+                {
+                    Version = HttpVersion.Version11,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionExact
+                };
+
+                // Act
+                var response = await client.SendAsync(request).DefaultTimeout();
+
+                // Assert
+                response.EnsureSuccessStatusCode();
+                Assert.Equal(HttpVersion.Version11, response.Version);
+                var responseText = await response.Content.ReadAsStringAsync().DefaultTimeout();
+                Assert.Equal("hello, world", responseText);
+
+                var pipeAccessRights = (PipeAccessRights)Convert.ToInt32(string.Join(",", response.Headers.GetValues("X-PipeAccessRights")), CultureInfo.InvariantCulture); 
+
+                Assert.Equal(PipeAccessRights.ReadWrite, pipeAccessRights & PipeAccessRights.ReadWrite);
+                Assert.Equal(PipeAccessRights.CreateNewInstance, pipeAccessRights & PipeAccessRights.CreateNewInstance);
+            }
+
+            using (var client = CreateClient(customSecurityPipeName))
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1/")
+                {
+                    Version = HttpVersion.Version11,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionExact
+                };
+
+                // Act
+                var response = await client.SendAsync(request).DefaultTimeout();
+
+                // Assert
+                response.EnsureSuccessStatusCode();
+                Assert.Equal(HttpVersion.Version11, response.Version);
+                var responseText = await response.Content.ReadAsStringAsync().DefaultTimeout();
+                Assert.Equal("hello, world", responseText);
+
+                var pipeAccessRights = (PipeAccessRights)Convert.ToInt32(string.Join(",", response.Headers.GetValues("X-PipeAccessRights")), CultureInfo.InvariantCulture);
+
+                Assert.Equal(PipeAccessRights.FullControl, pipeAccessRights & PipeAccessRights.FullControl);
+            }
+
+            await host.StopAsync().DefaultTimeout();
+        }
+    }
+
+    [ConditionalTheory]
+    [NamedPipesSupported]
     [InlineData(HttpProtocols.Http1)]
     [InlineData(HttpProtocols.Http2)]
     public async Task ListenNamedPipeEndpoint_ProtocolVersion_ClientSuccess(HttpProtocols protocols)
@@ -226,6 +463,7 @@ public class WebHostTests : LoggedTest
 
     [ConditionalTheory]
     [TlsAlpnSupported]
+    [NamedPipesSupported]
     [InlineData(HttpProtocols.Http1)]
     [InlineData(HttpProtocols.Http2)]
     public async Task ListenNamedPipeEndpoint_Tls_ClientSuccess(HttpProtocols protocols)
@@ -281,7 +519,8 @@ public class WebHostTests : LoggedTest
         }
     }
 
-    [Fact]
+    [ConditionalFact]
+    [NamedPipesSupported]
     public async Task ListenNamedPipeEndpoint_FromUrl_HelloWorld_ClientSuccess()
     {
         // Arrange

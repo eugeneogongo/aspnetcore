@@ -75,7 +75,7 @@ internal sealed class ViewBuffer : IHtmlContentBuilder
             {
                 return _currentPage;
             }
-            throw new IndexOutOfRangeException();
+            throw new ArgumentOutOfRangeException(nameof(index));
         }
     }
 
@@ -229,6 +229,13 @@ internal sealed class ViewBuffer : IHtmlContentBuilder
                 if (value.Value is ViewBuffer valueAsViewBuffer)
                 {
                     await valueAsViewBuffer.WriteToAsync(writer, encoder);
+                    continue;
+                }
+
+                if (value.Value is IHtmlAsyncContent valueAsHtmlAsyncContent)
+                {
+                    await valueAsHtmlAsyncContent.WriteToAsync(writer);
+                    await writer.FlushAsync();
                     continue;
                 }
 

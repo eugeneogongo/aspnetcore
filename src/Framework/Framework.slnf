@@ -1,14 +1,16 @@
 {
   "solution": {
-    "path": "..\\..\\AspNetCore.sln",
+    "path": "..\\..\\AspNetCore.slnx",
     "projects": [
       "src\\Analyzers\\Microsoft.AspNetCore.Analyzer.Testing\\src\\Microsoft.AspNetCore.Analyzer.Testing.csproj",
       "src\\Antiforgery\\src\\Microsoft.AspNetCore.Antiforgery.csproj",
       "src\\Components\\Authorization\\src\\Microsoft.AspNetCore.Components.Authorization.csproj",
       "src\\Components\\Components\\src\\Microsoft.AspNetCore.Components.csproj",
+      "src\\Components\\Endpoints\\src\\Microsoft.AspNetCore.Components.Endpoints.csproj",
       "src\\Components\\Forms\\src\\Microsoft.AspNetCore.Components.Forms.csproj",
       "src\\Components\\Server\\src\\Microsoft.AspNetCore.Components.Server.csproj",
       "src\\Components\\Web\\src\\Microsoft.AspNetCore.Components.Web.csproj",
+      "src\\Components\\WebAssembly\\Server\\src\\Microsoft.AspNetCore.Components.WebAssembly.Server.csproj",
       "src\\Configuration.KeyPerFile\\src\\Microsoft.Extensions.Configuration.KeyPerFile.csproj",
       "src\\DataProtection\\Abstractions\\src\\Microsoft.AspNetCore.DataProtection.Abstractions.csproj",
       "src\\DataProtection\\Cryptography.Internal\\src\\Microsoft.AspNetCore.Cryptography.Internal.csproj",
@@ -19,11 +21,12 @@
       "src\\Extensions\\Features\\src\\Microsoft.Extensions.Features.csproj",
       "src\\FileProviders\\Embedded\\src\\Microsoft.Extensions.FileProviders.Embedded.csproj",
       "src\\FileProviders\\Manifest.MSBuildTask\\src\\Microsoft.Extensions.FileProviders.Embedded.Manifest.Task.csproj",
-      "src\\Framework\\App.Ref\\src\\Microsoft.AspNetCore.App.Ref.csproj",
-      "src\\Framework\\App.Runtime\\src\\Microsoft.AspNetCore.App.Runtime.csproj",
+      "src\\Framework\\App.Ref\\src\\Microsoft.AspNetCore.App.Ref.sfxproj",
+      "src\\Framework\\App.Runtime\\src\\Microsoft.AspNetCore.App.Runtime.sfxproj",
       "src\\Framework\\AspNetCoreAnalyzers\\samples\\WebAppSample\\WebAppSample.csproj",
       "src\\Framework\\AspNetCoreAnalyzers\\src\\Analyzers\\Microsoft.AspNetCore.App.Analyzers.csproj",
       "src\\Framework\\AspNetCoreAnalyzers\\src\\CodeFixes\\Microsoft.AspNetCore.App.CodeFixes.csproj",
+      "src\\Framework\\AspNetCoreAnalyzers\\src\\SourceGenerators\\Microsoft.AspNetCore.App.SourceGenerators.csproj",
       "src\\Framework\\AspNetCoreAnalyzers\\test\\Microsoft.AspNetCore.App.Analyzers.Test.csproj",
       "src\\Framework\\test\\Microsoft.AspNetCore.App.UnitTests.csproj",
       "src\\HealthChecks\\Abstractions\\src\\Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.csproj",
@@ -105,7 +108,7 @@
       "src\\SignalR\\common\\SignalR.Common\\src\\Microsoft.AspNetCore.SignalR.Common.csproj",
       "src\\SignalR\\server\\Core\\src\\Microsoft.AspNetCore.SignalR.Core.csproj",
       "src\\SignalR\\server\\SignalR\\src\\Microsoft.AspNetCore.SignalR.csproj",
-      "src\\Testing\\src\\Microsoft.AspNetCore.Testing.csproj",
+      "src\\Testing\\src\\Microsoft.AspNetCore.InternalTesting.csproj",
       "src\\WebEncoders\\src\\Microsoft.Extensions.WebEncoders.csproj"
     ]
   }

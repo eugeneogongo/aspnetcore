@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -37,5 +39,17 @@ public static class ExceptionHandlerServiceCollectionExtensions
 
         services.AddOptions<ExceptionHandlerOptions>().Configure(configureOptions);
         return services;
+    }
+
+    /// <summary>
+    /// Adds an `IExceptionHandler` implementation to services. `IExceptionHandler` implementations are used by the exception handler middleware to handle unexpected request exceptions.
+    /// Multiple handlers can be added and they're called by the middleware in the order they're added.
+    /// </summary>
+    /// <typeparam name="T">The type of the exception handler implementation.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> for adding services.</param>
+    /// <returns>The modified <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddExceptionHandler<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>(this IServiceCollection services) where T : class, IExceptionHandler
+    {
+        return services.AddSingleton<IExceptionHandler, T>();
     }
 }

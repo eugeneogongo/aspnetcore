@@ -33,11 +33,12 @@ internal static class RenderTreeDiffBuilder
 
         var editsSegment = editsBuffer.ToSegment(editsBufferStartLength, editsBuffer.Count);
         var result = new RenderTreeDiff(componentId, editsSegment);
+
         return result;
     }
 
-    public static void DisposeFrames(RenderBatchBuilder batchBuilder, ArrayRange<RenderTreeFrame> frames)
-        => DisposeFramesInRange(batchBuilder, frames.Array, 0, frames.Count);
+    public static void DisposeFrames(RenderBatchBuilder batchBuilder, int componentId, ArrayRange<RenderTreeFrame> frames)
+        => DisposeFramesInRange(batchBuilder, componentId, frames.Array, 0, frames.Count);
 
     private static void AppendDiffEntriesForRange(
         ref DiffContext diffContext,
@@ -428,10 +429,12 @@ internal static class RenderTreeDiffBuilder
 
         while (hasMoreOld || hasMoreNew)
         {
-            var oldSeq = hasMoreOld ? oldTree[oldStartIndex].SequenceField : int.MaxValue;
-            var newSeq = hasMoreNew ? newTree[newStartIndex].SequenceField : int.MaxValue;
-            var oldAttributeName = oldTree[oldStartIndex].AttributeNameField;
-            var newAttributeName = newTree[newStartIndex].AttributeNameField;
+            var (oldSeq, oldAttributeName) = hasMoreOld
+                ? (oldTree[oldStartIndex].SequenceField, oldTree[oldStartIndex].AttributeNameField)
+                : (int.MaxValue, null);
+            var (newSeq, newAttributeName) = hasMoreNew
+                ? (newTree[newStartIndex].SequenceField, newTree[newStartIndex].AttributeNameField)
+                : (int.MaxValue, null);
 
             if (oldSeq == newSeq &&
                 string.Equals(oldAttributeName, newAttributeName, StringComparison.Ordinal))
@@ -724,11 +727,67 @@ internal static class RenderTreeDiffBuilder
                     break;
                 }
 
+            case RenderTreeFrameType.NamedEvent:
+                {
+                    // We don't have a use case for the event types changing, so we don't even check that. We assume for a given sequence number
+                    // the event type is always a constant. What can change is the frame index and the assigned name.
+                    if (oldFrameIndex != newFrameIndex
+                        || !string.Equals(oldFrame.NamedEventAssignedName, newFrame.NamedEventAssignedName, StringComparison.Ordinal))
+                    {
+                        // We could track the updates as a concept in its own right, but this situation will be uncommon,
+                        // so it's enough to treat it as a delete+add
+                        diffContext.BatchBuilder.RemoveNamedEvent(diffContext.ComponentId, oldFrameIndex, ref oldFrame);
+                        diffContext.BatchBuilder.AddNamedEvent(diffContext.ComponentId, newFrameIndex, ref newFrame);
+                    }
+
+                    break;
+                }
+
             // We don't handle attributes here, they have their own diff logic.
             // See AppendDiffEntriesForAttributeFrame
             default:
-                throw new NotImplementedException($"Encountered unsupported frame type during diffing: {newTree[newFrameIndex].FrameTypeField}");
+                throw new NotImplementedException(CreateDiffErrorMessage(ref diffContext, newFrameIndex));
         }
+    }
+
+    private static string CreateDiffErrorMessage(ref DiffContext diffContext, int newFrameIndex)
+    {
+        var newTree = diffContext.NewTree;
+        var unsupportedFrameType = newTree[newFrameIndex].FrameTypeField;
+        
+        // Build component hierarchy path
+        var componentPath = BuildComponentPath(diffContext.Renderer, diffContext.ComponentId);
+        
+        // Build frame types descriptor
+        var frameTypesDescriptor = BuildFrameTypeDescriptor(newTree, newFrameIndex);
+        
+        return $"Encountered an unsupported frame type during diffing {unsupportedFrameType} for Component Path: '{componentPath}' on tree with length '{newTree.Length}' and contents '{frameTypesDescriptor}'.";
+    }
+
+    private static string BuildFrameTypeDescriptor(RenderTreeFrame[] renderTree, int frameIndex)
+    {
+        var frameTypes = new List<string>();
+        for (var i = 0; i <= frameIndex && i < renderTree.Length; i++)
+        {
+            frameTypes.Add(renderTree[i].FrameTypeField.ToString());
+        }
+        
+        return string.Join(", ", frameTypes);
+    }
+
+    private static string BuildComponentPath(Renderer renderer, int componentId)
+    {
+        var componentPath = new List<string>();
+        var currentComponentState = renderer.GetRequiredComponentState(componentId);
+        
+        while (currentComponentState is not null)
+        {
+            var componentType = currentComponentState.Component.GetType();
+            componentPath.Insert(0, componentType.Name);
+            currentComponentState = currentComponentState.ParentComponentState;
+        }
+        
+        return string.Join(" -> ", componentPath);
     }
 
     // This should only be called for attributes that have the same name. This is an
@@ -819,6 +878,11 @@ internal static class RenderTreeDiffBuilder
                     InitializeNewComponentReferenceCaptureFrame(ref diffContext, ref newFrame);
                     break;
                 }
+            case RenderTreeFrameType.NamedEvent:
+                {
+                    InitializeNewNamedEvent(ref diffContext, newFrameIndex);
+                    break;
+                }
             default:
                 throw new NotImplementedException($"Unexpected frame type during {nameof(InsertNewFrame)}: {newFrame.FrameTypeField}");
         }
@@ -843,7 +907,7 @@ internal static class RenderTreeDiffBuilder
             case RenderTreeFrameType.Element:
                 {
                     var endIndexExcl = oldFrameIndex + oldFrame.ElementSubtreeLengthField;
-                    DisposeFramesInRange(diffContext.BatchBuilder, oldTree, oldFrameIndex, endIndexExcl);
+                    DisposeFramesInRange(diffContext.BatchBuilder, diffContext.ComponentId, oldTree, oldFrameIndex, endIndexExcl);
                     diffContext.Edits.Append(RenderTreeEdit.RemoveFrame(diffContext.SiblingIndex));
                     break;
                 }
@@ -862,6 +926,11 @@ internal static class RenderTreeDiffBuilder
             case RenderTreeFrameType.Markup:
                 {
                     diffContext.Edits.Append(RenderTreeEdit.RemoveFrame(diffContext.SiblingIndex));
+                    break;
+                }
+            case RenderTreeFrameType.NamedEvent:
+                {
+                    diffContext.BatchBuilder.RemoveNamedEvent(diffContext.ComponentId, oldFrameIndex, ref diffContext.OldTree[oldFrameIndex]);
                     break;
                 }
             default:
@@ -919,6 +988,9 @@ internal static class RenderTreeDiffBuilder
                 case RenderTreeFrameType.ComponentReferenceCapture:
                     InitializeNewComponentReferenceCaptureFrame(ref diffContext, ref frame);
                     break;
+                case RenderTreeFrameType.NamedEvent:
+                    InitializeNewNamedEvent(ref diffContext, i);
+                    break;
             }
         }
     }
@@ -927,15 +999,8 @@ internal static class RenderTreeDiffBuilder
     {
         var frames = diffContext.NewTree;
         ref var frame = ref frames[frameIndex];
-
-        if (frame.ComponentStateField != null)
-        {
-            throw new InvalidOperationException($"Child component already exists during {nameof(InitializeNewComponentFrame)}");
-        }
-
         var parentComponentId = diffContext.ComponentId;
-        diffContext.Renderer.InstantiateChildComponentOnFrame(ref frame, parentComponentId);
-        var childComponentState = frame.ComponentStateField;
+        var childComponentState = diffContext.Renderer.InstantiateChildComponentOnFrame(frames, frameIndex, parentComponentId);
 
         // Set initial parameters
         var initialParametersLifetime = new ParameterViewLifetime(diffContext.BatchBuilder);
@@ -953,7 +1018,7 @@ internal static class RenderTreeDiffBuilder
             newFrame.AttributeNameField.Length >= 3 &&
             newFrame.AttributeNameField.StartsWith("on", StringComparison.Ordinal))
         {
-            diffContext.Renderer.AssignEventHandlerId(ref newFrame);
+            diffContext.Renderer.AssignEventHandlerId(diffContext.ComponentId, ref newFrame);
         }
     }
 
@@ -983,7 +1048,12 @@ internal static class RenderTreeDiffBuilder
         newFrame.ComponentReferenceCaptureActionField(componentInstance);
     }
 
-    private static void DisposeFramesInRange(RenderBatchBuilder batchBuilder, RenderTreeFrame[] frames, int startIndex, int endIndexExcl)
+    private static void InitializeNewNamedEvent(ref DiffContext diffContext, int newTreeFrameIndex)
+    {
+        diffContext.BatchBuilder.AddNamedEvent(diffContext.ComponentId, newTreeFrameIndex, ref diffContext.NewTree[newTreeFrameIndex]);
+    }
+
+    private static void DisposeFramesInRange(RenderBatchBuilder batchBuilder, int componentId, RenderTreeFrame[] frames, int startIndex, int endIndexExcl)
     {
         for (var i = startIndex; i < endIndexExcl; i++)
         {
@@ -995,6 +1065,10 @@ internal static class RenderTreeDiffBuilder
             else if (frame.FrameTypeField == RenderTreeFrameType.Attribute && frame.AttributeEventHandlerIdField > 0)
             {
                 batchBuilder.DisposedEventHandlerIds.Append(frame.AttributeEventHandlerIdField);
+            }
+            else if (frame.FrameTypeField == RenderTreeFrameType.NamedEvent)
+            {
+                batchBuilder.RemoveNamedEvent(componentId, i, ref frames[i]);
             }
         }
     }

@@ -4,13 +4,14 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.Components.CompilerServices;
 using Microsoft.AspNetCore.Components.HotReload;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Components.Test.Helpers;
-using Microsoft.AspNetCore.Testing;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Microsoft.AspNetCore.Components.Test;
@@ -63,7 +64,7 @@ public class RendererTest
         {
             builder.AddContent(0, "Hello");
             builder.OpenComponent<MessageComponent>(1);
-            builder.AddAttribute(2, nameof(MessageComponent.Message), "Nested component output");
+            builder.AddComponentParameter(2, nameof(MessageComponent.Message), "Nested component output");
             builder.CloseComponent();
         });
 
@@ -1018,7 +1019,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAction), (Action)parentComponent.SomeMethod);
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAction), (Action)parentComponent.SomeMethod);
             builder.CloseComponent();
         };
         parentComponent.OnEvent = () =>
@@ -1059,7 +1060,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAction), (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAction), (Action)(() =>
             {
                 parentComponent.SomeMethod();
             }));
@@ -1101,7 +1102,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)parentComponent.SomeMethod));
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)parentComponent.SomeMethod));
             builder.CloseComponent();
         };
         parentComponent.OnEvent = () =>
@@ -1139,7 +1140,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
             {
                 parentComponent.SomeMethod();
             })));
@@ -1180,7 +1181,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Func<Task>)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Func<Task>)(() =>
             {
                 parentComponent.SomeMethod();
                 return Task.CompletedTask;
@@ -1220,7 +1221,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Action)parentComponent.SomeMethod));
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Action)parentComponent.SomeMethod));
             builder.CloseComponent();
         };
         parentComponent.OnEvent = () =>
@@ -1258,7 +1259,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Action)(() =>
             {
                 parentComponent.SomeMethod();
             })));
@@ -1299,7 +1300,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Func<Task>)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Func<Task>)(() =>
             {
                 parentComponent.SomeMethod();
                 return Task.CompletedTask;
@@ -1333,15 +1334,17 @@ public class RendererTest
     {
         // Arrange
         var renderer = new TestRenderer();
-        var parentComponent = new OuterEventComponent();
-        parentComponent.RenderFragment = (builder) =>
+        var parentComponent = new OuterEventComponent
+        {
+            RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAction), (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAction), (Action)(() =>
             {
                 // Do nothing.
             }));
             builder.CloseComponent();
+        }
         };
 
         var parentComponentId = renderer.AssignRootComponentId(parentComponent);
@@ -1369,7 +1372,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
             {
                 // Do nothing.
             })));
@@ -1403,7 +1406,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create(parentComponent, (Action<DerivedEventArgs>)((e) =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create(parentComponent, (Action<DerivedEventArgs>)((e) =>
             {
                 arg = e;
             })));
@@ -1432,15 +1435,17 @@ public class RendererTest
     {
         // Arrange
         var renderer = new TestRenderer();
-        var parentComponent = new OuterEventComponent();
-        parentComponent.RenderFragment = (builder) =>
+        var parentComponent = new OuterEventComponent
+        {
+            RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAction), (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAction), (Action)(() =>
             {
                 throw new OperationCanceledException();
             }));
             builder.CloseComponent();
+        }
         };
 
         var parentComponentId = renderer.AssignRootComponentId(parentComponent);
@@ -1456,7 +1461,7 @@ public class RendererTest
 
         // Assert
         Assert.Equal(TaskStatus.Canceled, task.Status);
-        await Assert.ThrowsAsync<TaskCanceledException>(() => task);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
     }
 
     [Fact]
@@ -1468,7 +1473,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
             {
                 throw new OperationCanceledException();
             })));
@@ -1488,7 +1493,7 @@ public class RendererTest
 
         // Assert
         Assert.Equal(TaskStatus.Canceled, task.Status);
-        await Assert.ThrowsAsync<TaskCanceledException>(() => task);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
     }
 
     [Fact]
@@ -1502,7 +1507,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create(parentComponent, (Action<DerivedEventArgs>)((e) =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create(parentComponent, (Action<DerivedEventArgs>)((e) =>
             {
                 arg = e;
                 throw new OperationCanceledException();
@@ -1524,7 +1529,7 @@ public class RendererTest
         // Assert
         Assert.NotNull(arg);
         Assert.Equal(TaskStatus.Canceled, task.Status);
-        await Assert.ThrowsAsync<TaskCanceledException>(() => task);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
     }
 
     [Fact]
@@ -1532,15 +1537,17 @@ public class RendererTest
     {
         // Arrange
         var renderer = new TestRenderer();
-        var parentComponent = new OuterEventComponent();
-        parentComponent.RenderFragment = (builder) =>
+        var parentComponent = new OuterEventComponent
+        {
+            RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAction), (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAction), (Action)(() =>
             {
                 throw new InvalidTimeZoneException();
             }));
             builder.CloseComponent();
+        }
         };
 
         var parentComponentId = renderer.AssignRootComponentId(parentComponent);
@@ -1568,7 +1575,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, (Action)(() =>
             {
                 throw new InvalidTimeZoneException();
             })));
@@ -1602,7 +1609,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Action<DerivedEventArgs>)((e) =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, (Action<DerivedEventArgs>)((e) =>
             {
                 arg = e;
                 throw new InvalidTimeZoneException();
@@ -1634,15 +1641,17 @@ public class RendererTest
         var tcs = new TaskCompletionSource();
 
         var renderer = new TestRenderer();
-        var parentComponent = new OuterEventComponent();
-        parentComponent.RenderFragment = (builder) =>
+        var parentComponent = new OuterEventComponent
+        {
+            RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAsyncAction), (Func<Task>)(async () =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAsyncAction), (Func<Task>)(async () =>
             {
                 await tcs.Task;
             }));
             builder.CloseComponent();
+        }
         };
 
         var parentComponentId = renderer.AssignRootComponentId(parentComponent);
@@ -1673,7 +1682,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, async () =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, async () =>
             {
                 await tcs.Task;
             }));
@@ -1710,7 +1719,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, async (e) =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, async (e) =>
             {
                 arg = e;
                 await tcs.Task;
@@ -1743,16 +1752,18 @@ public class RendererTest
         var tcs = new TaskCompletionSource();
 
         var renderer = new TestRenderer();
-        var parentComponent = new OuterEventComponent();
-        parentComponent.RenderFragment = (builder) =>
+        var parentComponent = new OuterEventComponent
+        {
+            RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAsyncAction), (Func<Task>)(async () =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAsyncAction), (Func<Task>)(async () =>
             {
                 await tcs.Task;
                 throw new TaskCanceledException();
             }));
             builder.CloseComponent();
+        }
         };
 
         var parentComponentId = renderer.AssignRootComponentId(parentComponent);
@@ -1785,7 +1796,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, async () =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, async () =>
             {
                 await tcs.Task;
                 throw new TaskCanceledException();
@@ -1825,7 +1836,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, async (e) =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, async (e) =>
             {
                 arg = e;
                 await tcs.Task;
@@ -1861,16 +1872,18 @@ public class RendererTest
         var tcs = new TaskCompletionSource();
 
         var renderer = new TestRenderer();
-        var parentComponent = new OuterEventComponent();
-        parentComponent.RenderFragment = (builder) =>
+        var parentComponent = new OuterEventComponent
+        {
+            RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickAsyncAction), (Func<Task>)(async () =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickAsyncAction), (Func<Task>)(async () =>
             {
                 await tcs.Task;
                 throw new InvalidTimeZoneException();
             }));
             builder.CloseComponent();
+        }
         };
 
         var parentComponentId = renderer.AssignRootComponentId(parentComponent);
@@ -1902,7 +1915,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, async () =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallback), EventCallback.Factory.Create(parentComponent, async () =>
             {
                 await tcs.Task;
                 throw new InvalidTimeZoneException();
@@ -1941,7 +1954,7 @@ public class RendererTest
         parentComponent.RenderFragment = (builder) =>
         {
             builder.OpenComponent<EventComponent>(0);
-            builder.AddAttribute(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, async (e) =>
+            builder.AddComponentParameter(1, nameof(EventComponent.OnClickEventCallbackOfT), EventCallback.Factory.Create<DerivedEventArgs>(parentComponent, async (e) =>
             {
                 arg = e;
                 await tcs.Task;
@@ -2064,9 +2077,9 @@ public class RendererTest
         var component = new TestComponent(builder =>
         {
             builder.OpenComponent<FakeComponent>(1);
-            builder.AddAttribute(2, nameof(FakeComponent.IntProperty), firstRender ? 123 : 256);
-            builder.AddAttribute(3, nameof(FakeComponent.ObjectProperty), objectThatWillNotChange);
-            builder.AddAttribute(4, nameof(FakeComponent.StringProperty), firstRender ? "String that will change" : "String that did change");
+            builder.AddComponentParameter(2, nameof(FakeComponent.IntProperty), firstRender ? 123 : 256);
+            builder.AddComponentParameter(3, nameof(FakeComponent.ObjectProperty), objectThatWillNotChange);
+            builder.AddComponentParameter(4, nameof(FakeComponent.StringProperty), firstRender ? "String that will change" : "String that did change");
             builder.CloseComponent();
         });
 
@@ -2102,7 +2115,7 @@ public class RendererTest
         var component = new TestComponent(builder =>
         {
             builder.OpenComponent<MessageComponent>(1);
-            builder.AddAttribute(2, nameof(MessageComponent.Message), firstRender ? "first" : "second");
+            builder.AddComponentParameter(2, nameof(MessageComponent.Message), firstRender ? "first" : "second");
             builder.CloseComponent();
         });
 
@@ -2138,9 +2151,9 @@ public class RendererTest
         var component = new TestComponent(builder =>
         {
             builder.OpenComponent<MyStrongComponent>(1);
-            builder.AddAttribute(1, "class", firstRender ? "first" : "second");
-            builder.AddAttribute(2, "id", "some_text");
-            builder.AddAttribute(3, nameof(MyStrongComponent.Text), "hi there.");
+            builder.AddComponentParameter(1, "class", firstRender ? "first" : "second");
+            builder.AddComponentParameter(2, "id", "some_text");
+            builder.AddComponentParameter(3, nameof(MyStrongComponent.Text), "hi there.");
             builder.CloseComponent();
         });
 
@@ -2178,9 +2191,9 @@ public class RendererTest
         var component = new TestComponent(builder =>
         {
             builder.OpenComponent<MyStrongComponent>(1);
-            builder.AddAttribute(1, "class", "cool-beans");
-            builder.AddAttribute(2, "id", "some_text");
-            builder.AddAttribute(3, nameof(MyStrongComponent.Text), "hi there.");
+            builder.AddComponentParameter(1, "class", "cool-beans");
+            builder.AddComponentParameter(2, "id", "some_text");
+            builder.AddComponentParameter(3, nameof(MyStrongComponent.Text), "hi there.");
             builder.CloseComponent();
         });
 
@@ -2211,7 +2224,7 @@ public class RendererTest
             {
                 // Nested descendants
                 builder.OpenComponent<ConditionalParentComponent<FakeComponent>>(100);
-                builder.AddAttribute(101, nameof(ConditionalParentComponent<FakeComponent>.IncludeChild), true);
+                builder.AddComponentParameter(101, nameof(ConditionalParentComponent<FakeComponent>.IncludeChild), true);
                 builder.CloseComponent();
             }
             builder.OpenComponent<FakeComponent>(200);
@@ -2230,7 +2243,7 @@ public class RendererTest
             .Where(frame => frame.FrameType == RenderTreeFrameType.Component)
             .Select(frame => frame.ComponentId)
             .ToList();
-        var childComponent3 = batch.ReferenceFrames.Where(f => f.ComponentId == 3)
+        var childComponent3 = batch.ReferenceFrames.Where(f => f.FrameType == RenderTreeFrameType.Component && f.ComponentId == 3)
             .Single().Component;
         Assert.Equal(new[] { 1, 2 }, childComponentIds);
         Assert.IsType<FakeComponent>(childComponent3);
@@ -2265,11 +2278,11 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<DisposableComponent>(1);
-                builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception1));
+                builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception1));
                 builder.CloseComponent();
 
                 builder.OpenComponent<DisposableComponent>(2);
-                builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception2));
+                builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception2));
                 builder.CloseComponent();
             }
         });
@@ -2305,7 +2318,7 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<AsyncDisposableComponent>(1);
-                builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => throw exception1));
+                builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => throw exception1));
                 builder.CloseComponent();
             }
         });
@@ -2322,9 +2335,8 @@ public class RendererTest
 
         // Outer component is still alive and not disposed.
         Assert.False(component.Disposed);
-        var aex = Assert.IsType<AggregateException>(Assert.Single(renderer.HandledExceptions));
-        var innerException = Assert.Single(aex.Flatten().InnerExceptions);
-        Assert.Same(exception1, innerException);
+        var aex = Assert.Single(renderer.HandledExceptions);
+        Assert.Same(exception1, aex);
     }
 
     [Fact]
@@ -2340,7 +2352,7 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<AsyncDisposableComponent>(1);
-                builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => default));
+                builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => default));
                 builder.CloseComponent();
             }
         });
@@ -2365,8 +2377,11 @@ public class RendererTest
     {
         // Arrange
         var semaphore = new Semaphore(0, 1);
-        var renderer = new TestRenderer { ShouldHandleExceptions = true };
-        renderer.OnExceptionHandled = () => semaphore.Release();
+        var renderer = new TestRenderer
+        {
+            ShouldHandleExceptions = true,
+            OnExceptionHandled = () => semaphore.Release()
+        };
         var exception1 = new InvalidOperationException();
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -2377,7 +2392,7 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<AsyncDisposableComponent>(1);
-                builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => { await tcs.Task; }));
+                builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => { await tcs.Task; }));
                 builder.CloseComponent();
             }
         });
@@ -2407,8 +2422,11 @@ public class RendererTest
     {
         // Arrange
         var semaphore = new Semaphore(0, 1);
-        var renderer = new TestRenderer { ShouldHandleExceptions = true };
-        renderer.OnExceptionHandled = () => semaphore.Release();
+        var renderer = new TestRenderer
+        {
+            ShouldHandleExceptions = true,
+            OnExceptionHandled = () => semaphore.Release()
+        };
         var exception1 = new InvalidOperationException();
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -2419,7 +2437,7 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<AsyncDisposableComponent>(1);
-                builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => { await tcs.Task; throw exception1; }));
+                builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => { await tcs.Task; throw exception1; }));
                 builder.CloseComponent();
             }
         });
@@ -2458,7 +2476,7 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<AsyncDisposableComponent>(1);
-                builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => throw new TaskCanceledException()));
+                builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => throw new TaskCanceledException()));
                 builder.CloseComponent();
             }
         });
@@ -2475,8 +2493,7 @@ public class RendererTest
 
         // Outer component is still alive and not disposed.
         Assert.False(component.Disposed);
-        var aex = Assert.IsType<AggregateException>(Assert.Single(renderer.HandledExceptions));
-        Assert.IsType<TaskCanceledException>(Assert.Single(aex.Flatten().InnerExceptions));
+        Assert.IsType<TaskCanceledException>(Assert.Single(renderer.HandledExceptions));
     }
 
     [Fact]
@@ -2494,7 +2511,7 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<AsyncDisposableComponent>(1);
-                builder.AddAttribute(
+                builder.AddComponentParameter(
                     1,
                     nameof(AsyncDisposableComponent.AsyncDisposeAction),
                     (Func<ValueTask>)(() => new ValueTask(tcs.Task)));
@@ -2544,24 +2561,24 @@ public class RendererTest
             {
                 builder.AddContent(0, "Hello");
                 builder.OpenComponent<DisposableComponent>(1);
-                builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count1++; }));
+                builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count1++; }));
                 builder.CloseComponent();
 
                 builder.OpenComponent<DisposableComponent>(2);
-                builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count2++; throw exception1; }));
+                builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count2++; throw exception1; }));
                 builder.CloseComponent();
 
                 builder.OpenComponent<DisposableComponent>(3);
-                builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count3++; }));
+                builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count3++; }));
                 builder.CloseComponent();
             }
 
             builder.OpenComponent<DisposableComponent>(4);
-            builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count4++; throw exception2; }));
+            builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count4++; throw exception2; }));
             builder.CloseComponent();
 
             builder.OpenComponent<DisposableComponent>(5);
-            builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count5++; }));
+            builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => { count5++; }));
             builder.CloseComponent();
         });
         var componentId = renderer.AssignRootComponentId(component);
@@ -2601,6 +2618,56 @@ public class RendererTest
         Assert.Equal(1, count4);
         Assert.Equal(1, count5);
         Assert.True(component.Disposed);
+    }
+
+    [Fact]
+    public async Task DoesNotDispatchEventsAfterOwnerComponentIsDisposed()
+    {
+        // Arrange
+        var renderer = new TestRenderer();
+        var eventCount = 0;
+        Action<EventArgs> origEventHandler = args => { eventCount++; };
+        var component = new ConditionalParentComponent<EventComponent>
+        {
+            IncludeChild = true,
+            ChildParameters = new Dictionary<string, object>
+            {
+                { nameof(EventComponent.OnTest), origEventHandler }
+            }
+        };
+        var rootComponentId = renderer.AssignRootComponentId(component);
+        component.TriggerRender();
+        var batch = renderer.Batches.Single();
+        var rootComponentDiff = batch.DiffsByComponentId[rootComponentId].Single();
+        var rootComponentFrame = batch.ReferenceFrames[0];
+        var childComponentFrame = rootComponentDiff.Edits
+            .Select(e => batch.ReferenceFrames[e.ReferenceFrameIndex])
+            .Where(f => f.FrameType == RenderTreeFrameType.Component)
+            .Single();
+        var childComponentId = childComponentFrame.ComponentId;
+        var childComponentDiff = batch.DiffsByComponentId[childComponentFrame.ComponentId].Single();
+        var eventHandlerId = batch.ReferenceFrames
+            .Skip(childComponentDiff.Edits[0].ReferenceFrameIndex) // Search from where the child component frames start
+            .Where(f => f.FrameType == RenderTreeFrameType.Attribute)
+            .Single(f => f.AttributeEventHandlerId != 0)
+            .AttributeEventHandlerId;
+
+        // Act/Assert 1: Event handler fires when we trigger it
+        Assert.Equal(0, eventCount);
+        var renderTask = renderer.DispatchEventAsync(eventHandlerId, args: null);
+        Assert.True(renderTask.IsCompletedSuccessfully);
+        Assert.Equal(1, eventCount);
+        await renderTask;
+
+        // Now remove the EventComponent, but without ever acknowledging the renderbatch, so the event handler doesn't get disposed
+        var disposalBatchAcknowledgementTcs = new TaskCompletionSource();
+        component.IncludeChild = false;
+        renderer.NextRenderResultTask = disposalBatchAcknowledgementTcs.Task;
+        component.TriggerRender();
+
+        // Act/Assert 2: Can no longer fire the original event. It's not an error but the delegate was not invoked.
+        await renderer.DispatchEventAsync(eventHandlerId, args: null);
+        Assert.Equal(1, eventCount);
     }
 
     [Fact]
@@ -2779,7 +2846,7 @@ public class RendererTest
         {
             builder.AddContent(0, "Child event count: " + eventCount);
             builder.OpenComponent<EventComponent>(1);
-            builder.AddAttribute(2, nameof(EventComponent.OnTest), new Action<EventArgs>(args =>
+            builder.AddComponentParameter(2, nameof(EventComponent.OnTest), new Action<EventArgs>(args =>
             {
                 eventCount++;
                 rootComponent.TriggerRender();
@@ -2855,7 +2922,7 @@ public class RendererTest
         var component = new TestComponent(builder => { });
 
         // Act/Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => component.TriggerRender());
+        var ex = Assert.Throws<InvalidOperationException>(component.TriggerRender);
         Assert.Equal("The render handle is not yet assigned.", ex.Message);
     }
 
@@ -2901,7 +2968,7 @@ public class RendererTest
         parent = new TestComponent(builder =>
         {
             builder.OpenComponent<ReRendersParentComponent>(0);
-            builder.AddAttribute(1, nameof(ReRendersParentComponent.Parent), parent);
+            builder.AddComponentParameter(1, nameof(ReRendersParentComponent.Parent), parent);
             builder.CloseComponent();
             builder.AddContent(2, $"Parent render count: {++parentRenderCount}");
         });
@@ -2967,7 +3034,7 @@ public class RendererTest
             if (shouldRenderChild)
             {
                 builder.OpenComponent<RendersSelfAfterEventComponent>(1);
-                builder.AddAttribute(2, "onclick", (Action<object>)((object obj) =>
+                builder.AddComponentParameter(2, "onclick", (Action<object>)((object obj) =>
                 {
                     // First we queue (1) a re-render of the root component, then the child component
                     // will queue (2) its own re-render. But by the time (1) completes, the child will
@@ -2983,7 +3050,7 @@ public class RendererTest
         component.TriggerRender();
         var childComponentId = renderer.Batches.Single()
             .ReferenceFrames
-            .Where(f => f.ComponentId != 0)
+            .Where(f => f.FrameType == RenderTreeFrameType.Component && f.ComponentId != 0)
             .Single()
             .ComponentId;
         var origEventHandlerId = renderer.Batches.Single()
@@ -2999,8 +3066,8 @@ public class RendererTest
         // Assert: correct render result
         Assert.True(renderTask.IsCompletedSuccessfully);
         var newBatch = renderer.Batches.Skip(1).Single();
-        Assert.Equal(1, newBatch.DisposedComponentIDs.Count);
-        Assert.Equal(1, newBatch.DiffsByComponentId.Count);
+        Assert.Single(newBatch.DisposedComponentIDs);
+        Assert.Single(newBatch.DiffsByComponentId);
         Assert.Collection(newBatch.DiffsByComponentId[componentId].Single().Edits,
             edit =>
             {
@@ -3272,7 +3339,7 @@ public class RendererTest
         var onAfterRenderCallCountLog = new List<int>();
         var component = new AsyncAfterRenderComponent(afterRenderTcs.Task)
         {
-            OnAfterRenderComplete = () => @event.Set(),
+            OnAfterRenderComplete = @event.Set,
         };
         var renderer = new AsyncUpdateTestRenderer()
         {
@@ -3301,7 +3368,7 @@ public class RendererTest
         var onAfterRenderCallCountLog = new List<int>();
         var component = new AsyncAfterRenderComponent(afterRenderTcs.Task)
         {
-            OnAfterRenderComplete = () => @event.Set(),
+            OnAfterRenderComplete = @event.Set,
         };
         var renderer = new AsyncUpdateTestRenderer()
         {
@@ -3329,7 +3396,7 @@ public class RendererTest
         {
             // First child will be re-rendered because we'll change its param
             builder.OpenComponent<AfterRenderCaptureComponent>(0);
-            builder.AddAttribute(1, "some param", showComponent3);
+            builder.AddComponentParameter(1, "some param", showComponent3);
             builder.CloseComponent();
 
             // Second child will not be re-rendered because nothing changes
@@ -3367,7 +3434,7 @@ public class RendererTest
         // Assert: Only the re-rendered component was notified of "after render"
         var batch2 = renderer.Batches.Skip(1).Single();
         Assert.Equal(2, batch2.DiffsInOrder.Count); // Parent and first child
-        Assert.Equal(1, batch2.DisposedComponentIDs.Count); // Third child
+        Assert.Single(batch2.DisposedComponentIDs); // Third child
         Assert.Equal(2, childComponents[0].OnAfterRenderCallCount); // Retained and re-rendered
         Assert.Equal(1, childComponents[1].OnAfterRenderCallCount); // Retained and not re-rendered
         Assert.Equal(1, childComponents[2].OnAfterRenderCallCount); // Disposed
@@ -3613,6 +3680,22 @@ public class RendererTest
     }
 
     [Fact]
+    public async Task ExceptionsDispatchedOffSyncContextCanBeHandledAsync()
+    {
+        // Arrange
+        var renderer = new TestRenderer { ShouldHandleExceptions = true };
+        var component = new NestedAsyncComponent();
+        var exception = new InvalidTimeZoneException("Error from outside the sync context.");
+
+        // Act
+        renderer.AssignRootComponentId(component);
+        await component.ExternalExceptionDispatch(exception);
+
+        // Assert
+        Assert.Same(exception, Assert.Single(renderer.HandledExceptions).GetBaseException());
+    }
+
+    [Fact]
     public async Task ExceptionsThrownAsynchronouslyAfterFirstRenderCanBeHandled()
     {
         // This differs from the "during first render" case, because some aspects of the rendering
@@ -3623,13 +3706,13 @@ public class RendererTest
         var renderer = new TestRenderer()
         {
             ShouldHandleExceptions = true,
-            OnExceptionHandled = () => { @event.Set(); },
+            OnExceptionHandled = @event.Set,
         };
         var taskToAwait = Task.CompletedTask;
         var component = new TestComponent(builder =>
         {
             builder.OpenComponent<ComponentThatAwaitsTask>(0);
-            builder.AddAttribute(1, nameof(ComponentThatAwaitsTask.TaskToAwait), taskToAwait);
+            builder.AddComponentParameter(1, nameof(ComponentThatAwaitsTask.TaskToAwait), taskToAwait);
             builder.CloseComponent();
         });
         var componentId = renderer.AssignRootComponentId(component);
@@ -4157,11 +4240,11 @@ public class RendererTest
         {
             builder.AddContent(0, "Hello");
             builder.OpenComponent<DisposableComponent>(1);
-            builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception1));
+            builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception1));
             builder.CloseComponent();
 
             builder.OpenComponent<DisposableComponent>(2);
-            builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception2));
+            builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception2));
             builder.CloseComponent();
         });
         var componentId = renderer.AssignRootComponentId(component);
@@ -4189,7 +4272,7 @@ public class RendererTest
         {
             builder.AddContent(0, "Hello");
             builder.OpenComponent<AsyncDisposableComponent>(1);
-            builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => { disposed = true; throw exception1; }));
+            builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(() => { disposed = true; throw exception1; }));
             builder.CloseComponent();
         });
         var componentId = renderer.AssignRootComponentId(component);
@@ -4217,7 +4300,7 @@ public class RendererTest
         {
             builder.AddContent(0, "Hello");
             builder.OpenComponent<AsyncDisposableComponent>(1);
-            builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => { await tcs.Task; disposed = true; throw exception1; }));
+            builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => { await tcs.Task; disposed = true; throw exception1; }));
             builder.CloseComponent();
         });
         var componentId = renderer.AssignRootComponentId(component);
@@ -4341,14 +4424,7 @@ public class RendererTest
     {
         // Arrange
         var renderer = new InvalidRecursiveRenderer();
-        var component = new CallbackOnRenderComponent(() =>
-        {
-            // The renderer disallows one batch to be started inside another, because that
-            // would violate all kinds of state tracking invariants. It's not something that
-            // would ever happen except if you subclass the renderer and do something unsupported
-            // that commences batches from inside each other.
-            renderer.ProcessPendingRender();
-        });
+        var component = new CallbackOnRenderComponent(renderer.ProcessPendingRender);
         var componentId = renderer.AssignRootComponentId(component);
 
         // Act/Assert
@@ -4365,7 +4441,7 @@ public class RendererTest
         var rootComponent = new TestComponent(builder =>
         {
             builder.OpenComponent<ParameterViewIllegalCapturingComponent>(0);
-            builder.AddAttribute(1, nameof(ParameterViewIllegalCapturingComponent.SomeParam), 0);
+            builder.AddComponentParameter(1, nameof(ParameterViewIllegalCapturingComponent.SomeParam), 0);
             builder.CloseComponent();
         });
         var rootComponentId = renderer.AssignRootComponentId(rootComponent);
@@ -4383,11 +4459,33 @@ public class RendererTest
         Assert.Throws<InvalidOperationException>(() => parameterView.GetEnumerator());
         Assert.Throws<InvalidOperationException>(() => parameterView.GetValueOrDefault<object>("anything"));
         Assert.Throws<InvalidOperationException>(() => parameterView.SetParameterProperties(new object()));
-        Assert.Throws<InvalidOperationException>(() => parameterView.ToDictionary());
+        Assert.Throws<InvalidOperationException>(parameterView.ToDictionary);
         var ex = Assert.Throws<InvalidOperationException>(() => parameterView.TryGetValue<object>("anything", out _));
 
         // It's enough to assert about one of the messages
         Assert.Equal($"The {nameof(ParameterView)} instance can no longer be read because it has expired. {nameof(ParameterView)} can only be read synchronously and must not be stored for later use.", ex.Message);
+    }
+
+    [Fact]
+    public async Task CanSetComponentParameter_WhenParameterTypeHasImplicitConversionToString()
+    {
+        // Arrange
+        var renderer = new TestRenderer();
+        var parameterValue = new ImplicitlyConvertsToString("Hello");
+        var rootComponent = new TestComponent(builder =>
+        {
+            builder.OpenComponent<ImplicitConversionComponent>(0);
+            builder.AddComponentParameter(1, nameof(ImplicitConversionComponent.SomeParam), parameterValue);
+            builder.CloseComponent();
+        });
+
+        // Act
+        var rootComponentId = renderer.AssignRootComponentId(rootComponent);
+        await renderer.RenderRootComponentAsync(rootComponentId);
+        var capturingComponent = (ImplicitConversionComponent)renderer.GetCurrentRenderTreeFrames(rootComponentId).Array[0].Component;
+
+        // Assert
+        Assert.Same(parameterValue, capturingComponent.SomeParam);
     }
 
     [Fact]
@@ -4452,7 +4550,7 @@ public class RendererTest
             TestErrorBoundary.RenderNestedErrorBoundaries(builder, builder =>
             {
                 builder.OpenComponent<ErrorThrowingComponent>(0);
-                builder.AddAttribute(1, nameof(ErrorThrowingComponent.ThrowDuringRender), exception);
+                builder.AddComponentParameter(1, nameof(ErrorThrowingComponent.ThrowDuringRender), exception);
                 builder.CloseComponent();
             });
         }));
@@ -4483,7 +4581,7 @@ public class RendererTest
             TestErrorBoundary.RenderNestedErrorBoundaries(builder, builder =>
             {
                 builder.OpenComponent<ErrorThrowingComponent>(0);
-                builder.AddAttribute(1, nameof(ErrorThrowingComponent.ThrowDuringParameterSettingSync), exception);
+                builder.AddComponentParameter(1, nameof(ErrorThrowingComponent.ThrowDuringParameterSettingSync), exception);
                 builder.CloseComponent();
             });
         });
@@ -4520,7 +4618,7 @@ public class RendererTest
             TestErrorBoundary.RenderNestedErrorBoundaries(builder, builder =>
             {
                 builder.OpenComponent<ErrorThrowingComponent>(0);
-                builder.AddAttribute(1, nameof(ErrorThrowingComponent.ThrowDuringParameterSettingAsync), exceptionTcs?.Task);
+                builder.AddComponentParameter(1, nameof(ErrorThrowingComponent.ThrowDuringParameterSettingAsync), exceptionTcs?.Task);
                 builder.CloseComponent();
             });
         });
@@ -4559,7 +4657,7 @@ public class RendererTest
             TestErrorBoundary.RenderNestedErrorBoundaries(builder, builder =>
             {
                 builder.OpenComponent<ErrorThrowingComponent>(0);
-                builder.AddAttribute(1, nameof(ErrorThrowingComponent.ThrowDuringEventSync), exception);
+                builder.AddComponentParameter(1, nameof(ErrorThrowingComponent.ThrowDuringEventSync), exception);
                 builder.CloseComponent();
             });
         }));
@@ -4598,7 +4696,7 @@ public class RendererTest
             TestErrorBoundary.RenderNestedErrorBoundaries(builder, builder =>
             {
                 builder.OpenComponent<ErrorThrowingComponent>(0);
-                builder.AddAttribute(1, nameof(ErrorThrowingComponent.ThrowDuringEventAsync), exceptionTcs.Task);
+                builder.AddComponentParameter(1, nameof(ErrorThrowingComponent.ThrowDuringEventAsync), exceptionTcs.Task);
                 builder.CloseComponent();
             });
         }));
@@ -4645,7 +4743,7 @@ public class RendererTest
                 TestErrorBoundary.RenderNestedErrorBoundaries(builder, builder =>
                 {
                     builder.OpenComponent<ErrorThrowingComponent>(0);
-                    builder.AddAttribute(1, nameof(ErrorThrowingComponent.ThrowDuringEventAsync), exceptionTcs.Task);
+                    builder.AddComponentParameter(1, nameof(ErrorThrowingComponent.ThrowDuringEventAsync), exceptionTcs.Task);
                     builder.CloseComponent();
                 });
             }
@@ -4796,19 +4894,22 @@ public class RendererTest
     {
         // Arrange
         var autoResetEvent = new AutoResetEvent(false);
-        var renderer = new TestRenderer { ShouldHandleExceptions = true };
-        renderer.OnExceptionHandled = () => autoResetEvent.Set();
+        var renderer = new TestRenderer
+        {
+            ShouldHandleExceptions = true,
+            OnExceptionHandled = () => autoResetEvent.Set()
+        };
         var exception1 = new InvalidTimeZoneException();
         var exception2Tcs = new TaskCompletionSource();
         var rootComponent = new TestComponent(builder =>
         {
             builder.AddContent(0, "Hello");
             builder.OpenComponent<DisposableComponent>(1);
-            builder.AddAttribute(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception1));
+            builder.AddComponentParameter(1, nameof(DisposableComponent.DisposeAction), (Action)(() => throw exception1));
             builder.CloseComponent();
 
             builder.OpenComponent<AsyncDisposableComponent>(2);
-            builder.AddAttribute(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => await exception2Tcs.Task));
+            builder.AddComponentParameter(1, nameof(AsyncDisposableComponent.AsyncDisposeAction), (Func<ValueTask>)(async () => await exception2Tcs.Task));
             builder.CloseComponent();
         });
         var rootComponentId = renderer.AssignRootComponentId(rootComponent);
@@ -4927,6 +5028,164 @@ public class RendererTest
         Assert.False(hotReloadManager.IsSubscribedTo);
     }
 
+    [Fact]
+    public async Task HotReload_ReRenderPreservesAsyncLocalValues()
+    {
+        await using var renderer = new TestRenderer();
+
+        var hotReloadManager = new HotReloadManager { MetadataUpdateSupported = true };
+        renderer.HotReloadManager = hotReloadManager;
+        HotReloadManager.Default.MetadataUpdateSupported = true;
+
+        var component = new AsyncLocalCaptureComponent();
+
+        // Establish AsyncLocal value before registering hot reload handler / rendering.
+        ServiceAccessor.TestAsyncLocal.Value = "AmbientValue";
+
+        var componentId = renderer.AssignRootComponentId(component);
+        await renderer.Dispatcher.InvokeAsync(() => renderer.RenderRootComponentAsync(componentId));
+
+        // Sanity: initial render should not have captured a hot-reload value yet.
+        Assert.Null(component.HotReloadValue);
+
+        // Simulate hot reload delta applied from a fresh thread (different ExecutionContext) so the AsyncLocal value is lost.
+        var expected = ServiceAccessor.TestAsyncLocal.Value;
+        var thread = new Thread(() =>
+        {
+            // Simulate environment where the ambient value is not present on the hot reload thread.
+            ServiceAccessor.TestAsyncLocal.Value = null;
+            hotReloadManager.TriggerOnDeltaApplied();
+        });
+        thread.Start();
+        thread.Join();
+
+        Assert.Equal(expected, component.HotReloadValue);
+    }
+
+    [Fact]
+    public void ThrowsForUnknownRenderMode_OnComponentType()
+    {
+        // Arrange
+        var renderer = new TestRenderer();
+        var component = new TestComponent(builder =>
+        {
+            builder.OpenComponent<ComponentWithUnknownRenderMode>(0);
+            builder.CloseComponent();
+        });
+
+        // Act
+        var componentId = renderer.AssignRootComponentId(component);
+        var ex = Assert.Throws<NotSupportedException>(() => component.TriggerRender());
+        Assert.Contains($"Cannot supply a component of type '{typeof(ComponentWithUnknownRenderMode)}' because the current platform does not support the render mode '{typeof(ComponentWithUnknownRenderMode.UnknownRenderMode)}'.", ex.Message);
+    }
+
+    [Fact]
+    public void ThrowsForUnknownRenderMode_AtCallSite()
+    {
+        // Arrange
+        var renderer = new TestRenderer();
+        var component = new TestComponent(builder =>
+        {
+            builder.OpenComponent<TestComponent>(0);
+            builder.AddComponentRenderMode(new ComponentWithUnknownRenderMode.UnknownRenderMode());
+            builder.CloseComponent();
+        });
+
+        // Act
+        var componentId = renderer.AssignRootComponentId(component);
+        var ex = Assert.Throws<NotSupportedException>(component.TriggerRender);
+        Assert.Contains($"Cannot supply a component of type '{typeof(TestComponent)}' because the current platform does not support the render mode '{typeof(ComponentWithUnknownRenderMode.UnknownRenderMode)}'.", ex.Message);
+    }
+
+    [Fact]
+    public void RenderModeResolverCanSupplyComponent_WithComponentTypeRenderMode()
+    {
+        // Arrange
+        var renderer = new RendererWithRenderModeResolver();
+
+        var component = new TestComponent(builder =>
+        {
+            builder.OpenComponent<ComponentWithRenderMode>(0);
+            builder.AddComponentParameter(1, nameof(MessageComponent.Message), "Some message");
+            builder.CloseComponent();
+        });
+
+        // Act
+        var componentId = renderer.AssignRootComponentId(component);
+        component.TriggerRender();
+
+        // Assert
+        var batch = renderer.Batches.Single();
+        var componentFrames = batch.GetComponentFrames<MessageComponent>();
+        var resolvedComponent = (MessageComponent)componentFrames.Single().Component;
+        Assert.Equal("Some message", resolvedComponent.Message);
+    }
+
+    [Fact]
+    public void RenderModeResolverCanSupplyComponent_CallSiteRenderMode()
+    {
+        // Arrange
+        var renderer = new RendererWithRenderModeResolver();
+
+        var component = new TestComponent(builder =>
+        {
+            builder.OpenComponent<TestComponent>(0);
+            builder.AddComponentParameter(1, nameof(MessageComponent.Message), "Some message");
+            builder.AddComponentRenderMode(new SubstituteComponentRenderMode());
+            builder.CloseComponent();
+        });
+
+        // Act
+        var componentId = renderer.AssignRootComponentId(component);
+        component.TriggerRender();
+
+        // Assert
+        var batch = renderer.Batches.Single();
+        var componentFrames = batch.GetComponentFrames<MessageComponent>();
+        var resolvedComponent = (MessageComponent)componentFrames.Single().Component;
+        Assert.Equal("Some message", resolvedComponent.Message);
+    }
+
+    [HasSubstituteComponentRenderMode]
+    private class ComponentWithRenderMode : IComponent
+    {
+        public void Attach(RenderHandle renderHandle) => throw new NotImplementedException();
+        public Task SetParametersAsync(ParameterView parameters) => throw new NotImplementedException();
+
+        public class HasSubstituteComponentRenderMode : RenderModeAttribute
+        {
+            public override IComponentRenderMode Mode => new SubstituteComponentRenderMode();
+        }
+    }
+
+    [HasUnknownRenderMode]
+    private class ComponentWithUnknownRenderMode : IComponent
+    {
+        public void Attach(RenderHandle renderHandle) => throw new NotImplementedException();
+        public Task SetParametersAsync(ParameterView parameters) => throw new NotImplementedException();
+
+        public class HasUnknownRenderMode : RenderModeAttribute
+        {
+            public override IComponentRenderMode Mode => new UnknownRenderMode();
+        }
+
+        public class UnknownRenderMode : IComponentRenderMode { }
+    }
+
+    private class RendererWithRenderModeResolver : TestRenderer
+    {
+        protected internal override IComponent ResolveComponentForRenderMode(Type componentType, int? parentComponentId, IComponentActivator componentActivator, IComponentRenderMode renderMode)
+        {
+            return renderMode switch
+            {
+                SubstituteComponentRenderMode => componentActivator.CreateInstance(typeof(MessageComponent)),
+                var other => throw new NotSupportedException($"{nameof(RendererWithRenderModeResolver)} should not have received rendermode {other}"),
+            };
+        }
+    }
+
+    private class SubstituteComponentRenderMode : IComponentRenderMode { }
+
     private class TestComponentActivator<TResult> : IComponentActivator where TResult : IComponent, new()
     {
         public List<Type> RequestedComponentTypes { get; } = new List<Type>();
@@ -4954,6 +5213,34 @@ public class RendererTest
 
         protected override Task UpdateDisplayAsync(in RenderBatch renderBatch)
             => Task.CompletedTask;
+    }
+
+    private class ServiceAccessor
+    {
+        public static AsyncLocal<string> TestAsyncLocal = new AsyncLocal<string>();
+    }
+
+    private class AsyncLocalCaptureComponent : IComponent
+    {
+        private bool _initialized;
+        private RenderHandle _renderHandle;
+        public string HotReloadValue { get; private set; }
+
+        public void Attach(RenderHandle renderHandle) => _renderHandle = renderHandle;
+
+        public Task SetParametersAsync(ParameterView parameters)
+        {
+            if (!_initialized)
+            {
+                _initialized = true; // First (normal) render, don't capture.
+            }
+            else
+            {
+                // Hot reload re-render path.
+                HotReloadValue = ServiceAccessor.TestAsyncLocal.Value;
+            }
+            return Task.CompletedTask;
+        }
     }
 
     private class TestComponent : IComponent, IDisposable
@@ -5160,7 +5447,7 @@ public class RendererTest
                 {
                     foreach (var kvp in ChildParameters)
                     {
-                        builder.AddAttribute(2, kvp.Key, kvp.Value);
+                        builder.AddComponentParameter(2, kvp.Key, kvp.Value);
                     }
                 }
                 builder.CloseComponent();
@@ -5461,10 +5748,10 @@ public class RendererTest
             foreach (var child in childrenToRender)
             {
                 builder.OpenComponent<NestedAsyncComponent>(2);
-                builder.AddAttribute(3, eventActionsName, component.EventActions);
-                builder.AddAttribute(4, whatToRenderName, component.WhatToRender);
-                builder.AddAttribute(5, testIdName, child);
-                builder.AddAttribute(6, logName, component.Log);
+                builder.AddComponentParameter(3, eventActionsName, component.EventActions);
+                builder.AddComponentParameter(4, whatToRenderName, component.WhatToRender);
+                builder.AddComponentParameter(5, testIdName, child);
+                builder.AddComponentParameter(6, logName, component.Log);
                 builder.CloseComponent();
             }
 
@@ -5611,6 +5898,20 @@ public class RendererTest
             OnAfterRenderAsyncSync,
             OnAfterRenderAsyncAsync,
         }
+
+        public Task ExternalExceptionDispatch(Exception exception)
+        {
+            var tcs = new TaskCompletionSource();
+            Task.Run(async () =>
+            {
+                // Inside Task.Run, we're outside the call stack or task chain of the lifecycle method, so
+                // DispatchExceptionAsync is needed to get an exception back into the component
+                await DispatchExceptionAsync(exception);
+                tcs.SetResult();
+            });
+
+            return tcs.Task;
+        }
     }
 
     private class ComponentThatAwaitsTask : ComponentBase
@@ -5747,11 +6048,11 @@ public class RendererTest
         {
             // Create an error boundary
             builder.OpenComponent<TestErrorBoundary>(0);
-            builder.AddAttribute(1, nameof(TestErrorBoundary.ChildContent), (RenderFragment)(builder =>
+            builder.AddComponentParameter(1, nameof(TestErrorBoundary.ChildContent), (RenderFragment)(builder =>
             {
                 // ... containing another error boundary, containing the content
                 builder.OpenComponent<TestErrorBoundary>(0);
-                builder.AddAttribute(1, nameof(TestErrorBoundary.ChildContent), innerContent);
+                builder.AddComponentParameter(1, nameof(TestErrorBoundary.ChildContent), innerContent);
                 builder.CloseComponent();
             }));
             builder.CloseComponent();
@@ -5823,5 +6124,42 @@ public class RendererTest
         {
             RenderCount++;
         }
+    }
+
+    private sealed class ImplicitConversionComponent : IComponent
+    {
+        [Parameter]
+        public ImplicitlyConvertsToString SomeParam { get; set; }
+
+        public void Attach(RenderHandle renderHandle)
+        {
+        }
+
+        public Task SetParametersAsync(ParameterView parameters)
+        {
+            foreach (var parameter in parameters)
+            {
+                if (parameter.Name.Equals(nameof(SomeParam), StringComparison.OrdinalIgnoreCase))
+                {
+                    // 'SomeParam' will be assigned to null if an implicit conversion changed the
+                    // parameter type.
+                    SomeParam = parameter.Value as ImplicitlyConvertsToString;
+                }
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ImplicitlyConvertsToString
+    {
+        private readonly string _value;
+
+        public ImplicitlyConvertsToString(string value)
+        {
+            _value = value;
+        }
+
+        public static implicit operator string(ImplicitlyConvertsToString value) => value._value;
     }
 }

@@ -20,12 +20,12 @@ internal sealed class EnumConverter<TEnum> : SettingsConverterBase<TEnum> where 
         switch (reader.TokenType)
         {
             case JsonTokenType.String:
-                var enumDescriptor = (EnumDescriptor?)Context.DescriptorRegistry.FindDescriptorByType(typeToConvert);
-                if (enumDescriptor == null)
-                {
-                    throw new InvalidOperationException($"Unable to resolve descriptor for {typeToConvert}.");
-                }
-                var valueDescriptor = enumDescriptor.FindValueByName(reader.GetString()!);
+                var enumDescriptor = (EnumDescriptor?)Context.DescriptorRegistry.FindDescriptorByType(typeToConvert)
+                    ?? throw new InvalidOperationException($"Unable to resolve descriptor for {typeToConvert}.");
+
+                var value = reader.GetString()!;
+                var valueDescriptor = JsonNamingHelpers.GetEnumFieldReadValue(enumDescriptor, value, Context.Settings)
+                    ?? throw new InvalidOperationException(@$"Error converting value ""{value}"" to enum type {typeToConvert}.");
 
                 return ConvertFromInteger(valueDescriptor.Number);
             case JsonTokenType.Number:
@@ -45,7 +45,10 @@ internal sealed class EnumConverter<TEnum> : SettingsConverterBase<TEnum> where 
         }
         else
         {
-            var name = Legacy.OriginalEnumValueHelper.GetOriginalName(value);
+            var enumDescriptor = (EnumDescriptor?)Context.DescriptorRegistry.FindDescriptorByType(value.GetType())
+                ?? throw new InvalidOperationException($"Unable to resolve descriptor for {value.GetType()}.");
+
+            var name = JsonNamingHelpers.GetEnumFieldWriteName(enumDescriptor, value, Context.Settings);
             if (name != null)
             {
                 writer.WriteStringValue(name);

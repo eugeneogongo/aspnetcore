@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Runtime.InteropServices;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Microsoft.AspNetCore;
 
@@ -20,6 +22,7 @@ public static class TestData
                 "Microsoft.AspNetCore.Antiforgery",
                 "Microsoft.AspNetCore.Authentication",
                 "Microsoft.AspNetCore.Authentication.Abstractions",
+                "Microsoft.AspNetCore.Authentication.BearerToken",
                 "Microsoft.AspNetCore.Authentication.Cookies",
                 "Microsoft.AspNetCore.Authentication.Core",
                 "Microsoft.AspNetCore.Authentication.OAuth",
@@ -27,6 +30,7 @@ public static class TestData
                 "Microsoft.AspNetCore.Authorization.Policy",
                 "Microsoft.AspNetCore.Components",
                 "Microsoft.AspNetCore.Components.Authorization",
+                "Microsoft.AspNetCore.Components.Endpoints",
                 "Microsoft.AspNetCore.Components.Forms",
                 "Microsoft.AspNetCore.Components.Server",
                 "Microsoft.AspNetCore.Components.Web",
@@ -98,6 +102,7 @@ public static class TestData
                 "Microsoft.AspNetCore.SignalR.Core",
                 "Microsoft.AspNetCore.SignalR.Protocols.Json",
                 "Microsoft.AspNetCore.StaticFiles",
+                "Microsoft.AspNetCore.StaticAssets",
                 "Microsoft.AspNetCore.WebSockets",
                 "Microsoft.AspNetCore.WebUtilities",
                 "Microsoft.Extensions.Caching.Abstractions",
@@ -115,6 +120,8 @@ public static class TestData
                 "Microsoft.Extensions.Configuration.Xml",
                 "Microsoft.Extensions.DependencyInjection",
                 "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Diagnostics",
+                "Microsoft.Extensions.Diagnostics.Abstractions",
                 "Microsoft.Extensions.Diagnostics.HealthChecks",
                 "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions",
                 "Microsoft.Extensions.FileProviders.Abstractions",
@@ -144,20 +151,29 @@ public static class TestData
                 "Microsoft.Extensions.Options.DataAnnotations",
                 "Microsoft.Extensions.Primitives",
                 "Microsoft.Extensions.WebEncoders",
+                "Microsoft.Extensions.Validation",
                 "Microsoft.JSInterop",
                 "Microsoft.Net.Http.Headers",
                 "System.Diagnostics.EventLog",
                 "System.Diagnostics.EventLog.Messages",
-                "System.IO.Pipelines",
+                "System.Formats.Cbor",
                 "System.Security.Cryptography.Pkcs",
                 "System.Security.Cryptography.Xml",
                 "System.Threading.RateLimiting",
             };
 
+        // System.Diagnostics.EventLog.Messages is only present in the Windows build.
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
+            !SkipOnHelixAttribute.OnHelix()) // Helix tests always run against the Windows assets (even on non-Windows)
+        {
+            ListedSharedFxAssemblies.Remove("System.Diagnostics.EventLog.Messages");
+        }
+
         ListedTargetingPackAssemblies = new List<string>
             {
                 { "Microsoft.AspNetCore.Antiforgery" },
                 { "Microsoft.AspNetCore.Authentication.Abstractions" },
+                { "Microsoft.AspNetCore.Authentication.BearerToken" },
                 { "Microsoft.AspNetCore.Authentication.Cookies" },
                 { "Microsoft.AspNetCore.Authentication.Core" },
                 { "Microsoft.AspNetCore.Authentication.OAuth" },
@@ -166,6 +182,7 @@ public static class TestData
                 { "Microsoft.AspNetCore.Authorization" },
                 { "Microsoft.AspNetCore.Components.Authorization" },
                 { "Microsoft.AspNetCore.Components.Forms" },
+                { "Microsoft.AspNetCore.Components.Endpoints" },
                 { "Microsoft.AspNetCore.Components.Server" },
                 { "Microsoft.AspNetCore.Components.Web" },
                 { "Microsoft.AspNetCore.Components" },
@@ -237,6 +254,7 @@ public static class TestData
                 { "Microsoft.AspNetCore.SignalR.Protocols.Json" },
                 { "Microsoft.AspNetCore.SignalR" },
                 { "Microsoft.AspNetCore.StaticFiles" },
+                { "Microsoft.AspNetCore.StaticAssets" },
                 { "Microsoft.AspNetCore.WebSockets" },
                 { "Microsoft.AspNetCore.WebUtilities" },
                 { "Microsoft.AspNetCore" },
@@ -255,6 +273,8 @@ public static class TestData
                 { "Microsoft.Extensions.Configuration" },
                 { "Microsoft.Extensions.DependencyInjection.Abstractions" },
                 { "Microsoft.Extensions.DependencyInjection" },
+                { "Microsoft.Extensions.Diagnostics" },
+                { "Microsoft.Extensions.Diagnostics.Abstractions" },
                 { "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" },
                 { "Microsoft.Extensions.Diagnostics.HealthChecks" },
                 { "Microsoft.Extensions.Features" },
@@ -284,10 +304,12 @@ public static class TestData
                 { "Microsoft.Extensions.Options" },
                 { "Microsoft.Extensions.Primitives" },
                 { "Microsoft.Extensions.WebEncoders" },
+                { "Microsoft.Extensions.Validation" },
                 { "Microsoft.JSInterop" },
                 { "Microsoft.Net.Http.Headers" },
                 { "System.Diagnostics.EventLog" },
-                { "System.IO.Pipelines" },
+                { "System.Formats.Cbor" },
+                { "System.Security.Cryptography.Pkcs" },
                 { "System.Security.Cryptography.Xml" },
                 { "System.Threading.RateLimiting" },
             };
@@ -302,7 +324,7 @@ public static class TestData
 
     public static string GetDefaultNetCoreTargetFramework() => GetTestDataValue("DefaultNetCoreTargetFramework");
 
-    public static string GetMicrosoftNETCoreAppPackageVersion() => GetTestDataValue("MicrosoftNETCoreAppRuntimeVersion");
+    public static string GetMicrosoftNETCoreAppVersion() => GetTestDataValue("MicrosoftNETCoreAppRefVersion");
 
     public static string GetReferencePackSharedFxVersion() => GetTestDataValue("ReferencePackSharedFxVersion");
 

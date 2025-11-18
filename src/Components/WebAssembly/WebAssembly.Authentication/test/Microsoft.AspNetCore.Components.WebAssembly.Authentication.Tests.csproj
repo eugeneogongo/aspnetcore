@@ -9,11 +9,10 @@
     <Reference Include="Microsoft.AspNetCore.Components.WebAssembly" />
     <Reference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" />
     <Reference Include="Microsoft.CodeAnalysis.CSharp" />
-    <Reference Include="System.Text.Json" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\WebAssembly\test\TestJSUnmarshalledRuntime.cs" Link="Shared\TestWebAssemblyJSRuntimeInvoker.cs" />
+    <Compile Include="..\..\WebAssembly\test\TestInternalJSImportMethods.cs" Link="Shared\TestInternalJSImportMethods.cs" />
   </ItemGroup>
 
 </Project>

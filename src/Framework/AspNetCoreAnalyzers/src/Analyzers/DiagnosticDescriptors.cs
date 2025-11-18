@@ -8,192 +8,244 @@ namespace Microsoft.AspNetCore.Analyzers;
 [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisReleaseTracking", "RS2008:Enable analyzer release tracking")]
 internal static class DiagnosticDescriptors
 {
+    private const string Security = "Security";
+    private const string Usage = "Usage";
+    private const string AnalyzersLink = "https://aka.ms/aspnet/analyzers";
+
+    private static LocalizableResourceString CreateLocalizableResourceString(string resource) => new(resource, Resources.ResourceManager, typeof(Resources));
+    
     internal static readonly DiagnosticDescriptor DoNotUseModelBindingAttributesOnRouteHandlerParameters = new(
         "ASP0003",
-        "Do not use model binding attributes with route handlers",
-        "{0} should not be specified for a {1} Delegate parameter",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseModelBindingAttributesOnRouteHandlerParameters_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseModelBindingAttributesOnRouteHandlerParameters_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotReturnActionResultsFromRouteHandlers = new(
         "ASP0004",
-        "Do not use action results with route handlers",
-        "IActionResult instances should not be returned from a {0} Delegate parameter. Consider returning an equivalent result from Microsoft.AspNetCore.Http.Results.",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotReturnActionResultsFromRouteHandlers_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotReturnActionResultsFromRouteHandlers_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DetectMisplacedLambdaAttribute = new(
         "ASP0005",
-        "Do not place attribute on method called by route handler lambda",
-        "'{0}' should be placed directly on the route handler lambda to be effective",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DetectMisplacedLambdaAttribute_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DetectMisplacedLambdaAttribute_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotUseNonLiteralSequenceNumbers = new(
         "ASP0006",
-        "Do not use non-literal sequence numbers",
-        "'{0}' should not be used as a sequence number. Instead, use an integer literal representing source code order.",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseNonLiteralSequenceNumbers_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseNonLiteralSequenceNumbers_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DetectMismatchedParameterOptionality = new(
         "ASP0007",
-        "Route parameter and argument optionality is mismatched",
-        "'{0}' argument should be annotated as optional or nullable to match route parameter",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DetectMismatchedParameterOptionality_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DetectMismatchedParameterOptionality_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotUseConfigureWebHostWithConfigureHostBuilder = new(
         "ASP0008",
-        "Do not use ConfigureWebHost with WebApplicationBuilder.Host",
-        "ConfigureWebHost cannot be used with WebApplicationBuilder.Host",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseConfigureWebHostWithConfigureHostBuilder_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseConfigureWebHostWithConfigureHostBuilder_Message)),
+        Usage,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotUseConfigureWithConfigureWebHostBuilder = new(
         "ASP0009",
-        "Do not use Configure with WebApplicationBuilder.WebHost",
-        "Configure cannot be used with WebApplicationBuilder.WebHost",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseConfigureWithConfigureWebHostBuilder_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseConfigureWithConfigureWebHostBuilder_Message)),
+        Usage,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotUseUseStartupWithConfigureWebHostBuilder = new(
         "ASP0010",
-        "Do not use UseStartup with WebApplicationBuilder.WebHost",
-        "UseStartup cannot be used with WebApplicationBuilder.WebHost",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseUseStartupWithConfigureWebHostBuilder_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseUseStartupWithConfigureWebHostBuilder_Message)),
+        Usage,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotUseHostConfigureLogging = new(
         "ASP0011",
-        "Suggest using builder.Logging over Host.ConfigureLogging or WebHost.ConfigureLogging",
-        "Suggest using builder.Logging instead of {0}",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseHostConfigureLogging_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseHostConfigureLogging_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotUseHostConfigureServices = new(
         "ASP0012",
-        "Suggest using builder.Services over Host.ConfigureServices or WebHost.ConfigureServices",
-        "Suggest using builder.Services instead of {0}",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseHostConfigureServices_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DoNotUseHostConfigureServices_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DisallowConfigureAppConfigureHostBuilder = new(
         "ASP0013",
-        "Suggest switching from using Configure methods to WebApplicationBuilder.Configuration",
-        "Suggest using WebApplicationBuilder.Configuration instead of {0}",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DisallowConfigureAppConfigureHostBuilder_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_DisallowConfigureAppConfigureHostBuilder_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor UseTopLevelRouteRegistrationsInsteadOfUseEndpoints = new(
         "ASP0014",
-        "Suggest using top level route registrations",
-        "Suggest using top level route registrations instead of {0}",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_UseTopLevelRouteRegistrationsInsteadOfUseEndpoints_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_UseTopLevelRouteRegistrationsInsteadOfUseEndpoints_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor UseHeaderDictionaryPropertiesInsteadOfIndexer = new(
         "ASP0015",
-        new LocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryIndexer_Title), Resources.ResourceManager, typeof(Resources)),
-        new LocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryIndexer_Message), Resources.ResourceManager, typeof(Resources)),
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryIndexer_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryIndexer_Message)),
+        Usage,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotReturnValueFromRequestDelegate = new(
         "ASP0016",
-        new LocalizableResourceString(nameof(Resources.Analyzer_RequestDelegateReturnValue_Title), Resources.ResourceManager, typeof(Resources)),
-        new LocalizableResourceString(nameof(Resources.Analyzer_RequestDelegateReturnValue_Message), Resources.ResourceManager, typeof(Resources)),
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_RequestDelegateReturnValue_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_RequestDelegateReturnValue_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor RoutePatternIssue = new(
         "ASP0017",
-        new LocalizableResourceString(nameof(Resources.Analyzer_RouteIssue_Title), Resources.ResourceManager, typeof(Resources)),
-        new LocalizableResourceString(nameof(Resources.Analyzer_RouteIssue_Message), Resources.ResourceManager, typeof(Resources)),
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_RouteIssue_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_RouteIssue_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor RoutePatternUnusedParameter = new(
         "ASP0018",
-        new LocalizableResourceString(nameof(Resources.Analyzer_UnusedParameter_Title), Resources.ResourceManager, typeof(Resources)),
-        new LocalizableResourceString(nameof(Resources.Analyzer_UnusedParameter_Message), Resources.ResourceManager, typeof(Resources)),
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_UnusedParameter_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_UnusedParameter_Message)),
+        Usage,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor DoNotUseIHeaderDictionaryAdd = new(
         "ASP0019",
-        new LocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryAdd_Title), Resources.ResourceManager, typeof(Resources)),
-        new LocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryAdd_Message), Resources.ResourceManager, typeof(Resources)),
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryAdd_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_HeaderDictionaryAdd_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
-    internal static readonly DiagnosticDescriptor RouteParameterComplexTypeIsNotParsableOrBindable = new(
+    internal static readonly DiagnosticDescriptor RouteParameterComplexTypeIsNotParsable = new(
         "ASP0020",
-        "Complex types referenced by route parameters must be parsable",
-        "Parameter '{0}' of type {1} should define a bool TryParse(string, IFormatProvider, out {1}) method, or implement IParsable<{1}>, or define a ValueTask<{1}> BindAsync(HttpContext), or implement IBindableFromHttpContext<{1}>.",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_RouteParameterComplexTypeIsNotParsable_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_RouteParameterComplexTypeIsNotParsable_Message)),
+        Usage,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor BindAsyncSignatureMustReturnValueTaskOfT = new(
         "ASP0021",
-        "When implementing BindAsync(...) method, the return type must be ValueTask<T>.",
-        "Parameter '{0}' of type {1} has a BindAsync(...) method, but the return type is not ValueTask<{1}>. Consider implementing IBindFromHttpContext<{1}> to enforce implementation.",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_BindAsyncSignatureMustReturnValueTaskOfT_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_BindAsyncSignatureMustReturnValueTaskOfT_Message)),
+        Usage,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor AmbiguousRouteHandlerRoute = new(
         "ASP0022",
-        "Route conflict detected between route handlers",
-        "Route '{0}' conflicts with another handler route. An HTTP request that matches multiple routes results in an ambiguous match error. Fix the conflict by changing the route's pattern, HTTP method, or route constraints.",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_AmbiguousRouteHandlerRoute_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_AmbiguousRouteHandlerRoute_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
 
     internal static readonly DiagnosticDescriptor AmbiguousActionRoute = new(
         "ASP0023",
-        "Route conflict detected between controller actions",
-        "Route '{0}' conflicts with another action route. An HTTP request that matches multiple routes results in an ambiguous match error. Fix the conflict by changing the route's pattern, HTTP method, or route constraints.",
-        "Usage",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_AmbiguousActionRoute_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_AmbiguousActionRoute_Message)),
+        Usage,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://aka.ms/aspnet/analyzers");
+        helpLinkUri: AnalyzersLink);
+
+    internal static readonly DiagnosticDescriptor AtMostOneFromBodyAttribute = new(
+        "ASP0024",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_MultipleFromBody_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_MultipleFromBody_Message)),
+        Usage,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        helpLinkUri: AnalyzersLink);
+
+    internal static readonly DiagnosticDescriptor UseAddAuthorizationBuilder = new(
+        "ASP0025",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_UseAddAuthorizationBuilder_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_UseAddAuthorizationBuilder_Message)),
+        Usage,
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        helpLinkUri: AnalyzersLink);
+
+    internal static readonly DiagnosticDescriptor OverriddenAuthorizeAttribute = new(
+        "ASP0026",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_OverriddenAuthorizeAttribute_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_OverriddenAuthorizeAttribute_Message)),
+        Security,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        helpLinkUri: AnalyzersLink);
+
+    internal static readonly DiagnosticDescriptor PublicPartialProgramClassNotRequired = new(
+        "ASP0027",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_PublicPartialProgramClass_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_PublicPartialProgramClass_Message)),
+        Usage,
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        helpLinkUri: AnalyzersLink,
+        customTags: WellKnownDiagnosticTags.Unnecessary);
+
+    internal static readonly DiagnosticDescriptor KestrelShouldListenOnIPv6AnyInsteadOfIpAny = new(
+        "ASP0028",
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_KestrelShouldListenOnIPv6AnyInsteadOfIpAny_Title)),
+        CreateLocalizableResourceString(nameof(Resources.Analyzer_KestrelShouldListenOnIPv6AnyInsteadOfIpAny_Message)),
+        Usage,
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        helpLinkUri: AnalyzersLink);
 }

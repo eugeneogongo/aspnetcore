@@ -3,7 +3,11 @@
 
 package com.microsoft.signalr;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Type;
 import java.nio.ByteBuffer;
@@ -314,7 +318,7 @@ class HubConnectionTest {
         Action action = () -> value.getAndUpdate((val) -> val + 1);
         Action secondAction = () -> {
             value.getAndUpdate((val) -> val + 2);
-            
+
             complete.onComplete();
         };
 
@@ -1094,6 +1098,37 @@ class HubConnectionTest {
         assertEquals("First", result.timeout(30, TimeUnit.SECONDS).blockingFirst());
         Throwable exception = assertThrows(HubException.class, () -> result.timeout(30, TimeUnit.SECONDS).blockingLast());
         assertEquals("There was an error", exception.getMessage());
+    }
+
+    @Test
+    public void checkStreamItemBindingFailure() {
+        try (TestLogger logger = new TestLogger()) {
+            MockTransport mockTransport = new MockTransport();
+            HubConnection hubConnection = TestUtils.createHubConnection("http://example.com", mockTransport);
+
+            hubConnection.start().timeout(30, TimeUnit.SECONDS).blockingAwait();
+
+            AtomicBoolean onNextCalled = new AtomicBoolean();
+            Observable<Integer> result = hubConnection.stream(Integer.class, "echo", "message");
+            result.subscribe((item) -> onNextCalled.set(true),
+                    (error) -> {},
+                    () -> {});
+
+            assertEquals("{\"type\":4,\"invocationId\":\"1\",\"target\":\"echo\",\"arguments\":[\"message\"]}" + RECORD_SEPARATOR,
+                    TestUtils.byteBufferToString(mockTransport.getSentMessages()[1]));
+            assertFalse(onNextCalled.get());
+
+            mockTransport.receiveMessage("{\"type\":2,\"invocationId\":\"1\",\"item\":\"str\"}" + RECORD_SEPARATOR);
+
+            assertFalse(onNextCalled.get());
+
+            mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"result\":1}" + RECORD_SEPARATOR);
+
+            assertEquals(1, result.timeout(30, TimeUnit.SECONDS).blockingFirst());
+
+            ILoggingEvent log = logger.assertLog("Failed to bind argument received in stream '1'.");
+            assertTrue(log.getThrowableProxy().getClassName().contains("gson.JsonSyntaxException"));
+        }
     }
 
     @Test
@@ -2749,6 +2784,32 @@ class HubConnectionTest {
     }
 
     @Test
+    public void closeWithPendingNegotiate() {
+        SingleSubject<HttpResponse> responseSubject = SingleSubject.create();
+
+        TestHttpClient client = new TestHttpClient()
+                .on("POST", (req) -> responseSubject);
+
+        HubConnection hubConnection = HubConnectionBuilder
+                .create("http://example.com")
+                .withHttpClient(client)
+                .build();
+
+        Completable start = hubConnection.start();
+        assertEquals(HubConnectionState.CONNECTING, hubConnection.getConnectionState());
+
+        Completable stop = hubConnection.stop();
+
+        responseSubject.onSuccess(new HttpResponse(404, "", TestUtils.emptyByteBuffer));
+        stop.timeout(3, TimeUnit.SECONDS).blockingAwait();
+        assertEquals(HubConnectionState.DISCONNECTED, hubConnection.getConnectionState());
+
+        HttpRequestException exception = assertThrows(HttpRequestException.class, () -> start.blockingAwait(10, TimeUnit.SECONDS));
+        assertEquals("Unexpected status code returned from negotiate: 404 .", exception.getMessage());
+        assertEquals(404, exception.getStatusCode());
+    }
+
+    @Test
     public void negotiateThatRedirectsForeverFailsAfter100Tries() {
         TestHttpClient client = new TestHttpClient().on("POST", "http://example.com/negotiate?negotiateVersion=1",
                 (req) -> Single.just(new HttpResponse(200, "", TestUtils.stringToByteBuffer("{\"url\":\"http://example.com\"}"))));
@@ -2797,14 +2858,11 @@ class HubConnectionTest {
                     .create("http://example")
                     .withTransport(TransportEnum.WEBSOCKETS)
                     .shouldSkipNegotiate(true)
+                    .withHandshakeResponseTimeout(1)
                     .withHttpClient(client)
                     .build();
 
-            try {
-                hubConnection.start().timeout(30, TimeUnit.SECONDS).blockingAwait();
-            } catch (Exception e) {
-                assertEquals("WebSockets isn't supported in testing currently.", e.getMessage());
-            }
+            assertThrows(RuntimeException.class, () -> hubConnection.start().timeout(30, TimeUnit.SECONDS).blockingAwait());
             assertEquals(HubConnectionState.DISCONNECTED, hubConnection.getConnectionState());
             assertFalse(negotiateCalled.get());
 
@@ -3961,5 +4019,86 @@ class HubConnectionTest {
         assertEquals(HubConnectionState.DISCONNECTED, hubConnection.getConnectionState());
 
         assertTrue(close.blockingAwait(30, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void serverTimeoutIsSetThroughBuilder()
+    {
+        long timeout = 60 * 1000;
+        HubConnection hubConnection = HubConnectionBuilder
+                .create("http://example.com")
+                .withServerTimeout(timeout)
+                .build();
+
+        assertEquals(timeout, hubConnection.getServerTimeout());
+    }
+
+    @Test
+    public void keepAliveIntervalIsSetThroughBuilder()
+    {
+        long interval = 60 * 1000;
+        HubConnection hubConnection = HubConnectionBuilder
+                .create("http://example.com")
+                .withKeepAliveInterval(interval)
+                .build();
+
+        assertEquals(interval, hubConnection.getKeepAliveInterval());
+    }
+
+    @Test
+    public void WebsocketStopLoggedOnce() {
+        try (TestLogger logger = new TestLogger(WebSocketTransport.class.getName())) {
+            AtomicBoolean negotiateCalled = new AtomicBoolean(false);
+            TestHttpClient client = new TestHttpClient().on("POST", "http://example.com/negotiate?negotiateVersion=1",
+                    (req) -> {
+                        negotiateCalled.set(true);
+                        return Single.just(new HttpResponse(200, "",
+                            TestUtils.stringToByteBuffer("{\"connectionId\":\"bVOiRPG8-6YiJ6d7ZcTOVQ\",\""
+                                    + "availableTransports\":[{\"transport\":\"WebSockets\",\"transferFormats\":[\"Text\",\"Binary\"]}]}")));
+                    });
+
+            HubConnection hubConnection = HubConnectionBuilder
+                    .create("http://example")
+                    .withTransport(TransportEnum.WEBSOCKETS)
+                    .shouldSkipNegotiate(true)
+                    .withHandshakeResponseTimeout(100)
+                    .withHttpClient(client)
+                    .build();
+
+            Completable startTask = hubConnection.start().timeout(30, TimeUnit.SECONDS);
+            hubConnection.stop().timeout(30, TimeUnit.SECONDS).blockingAwait();
+
+            assertThrows(RuntimeException.class, () -> startTask.blockingAwait());
+            assertEquals(HubConnectionState.DISCONNECTED, hubConnection.getConnectionState());
+            assertFalse(negotiateCalled.get());
+
+            ILoggingEvent[] logs = logger.getLogs();
+            int count = 0;
+            for (ILoggingEvent iLoggingEvent : logs) {
+                if (iLoggingEvent.getFormattedMessage().startsWith("WebSocket connection stopped.")) {
+                    count++;
+                }
+            }
+
+            assertEquals(1, count);
+        }
+    }
+
+    // https://github.com/dotnet/aspnetcore/issues/49043
+    @Test
+    public void sendsCloseMessageOnStop() throws InterruptedException {
+        MockTransport mockTransport = new MockTransport(true, true);
+        HubConnection hubConnection = TestUtils.createHubConnection("http://example.com", mockTransport);
+
+        hubConnection.start().timeout(30, TimeUnit.SECONDS).blockingAwait();
+
+        hubConnection.stop().timeout(30, TimeUnit.SECONDS).blockingAwait();
+
+        ByteBuffer[] messages = mockTransport.getSentMessages();
+
+        // handshake, close
+        assertEquals(2, messages.length);
+        String message = TestUtils.byteBufferToString(messages[1]);
+        assertEquals("{\"type\":7,\"allowReconnect\":false}" + RECORD_SEPARATOR, message);
     }
 }

@@ -18,11 +18,13 @@
 
   <ItemGroup Condition="'$(TargetFramework)' != '$(DefaultNetCoreTargetFramework)'">
     <Compile Include="$(SharedSourceRoot)Nullable\NullableAttributes.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedSourceRoot)TrimmingAttributes.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Microsoft.CSharp" Condition="'$(TargetFrameworkIdentifier)' != '.NETCoreApp'" />
     <Reference Include="Newtonsoft.Json" />
+    <Reference Include="Microsoft.AspNetCore.Http.Abstractions" Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'" />
   </ItemGroup>
 
   <ItemGroup>

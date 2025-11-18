@@ -30,12 +30,27 @@ internal sealed class WebViewJSRuntime : JSRuntime
 
     protected override void BeginInvokeJS(long taskId, string identifier, string argsJson, JSCallResultType resultType, long targetInstanceId)
     {
+        var invocationInfo = new JSInvocationInfo
+        {
+            AsyncHandle = taskId,
+            Identifier = identifier,
+            ArgsJson = argsJson,
+            CallType = JSCallType.FunctionCall,
+            ResultType = resultType,
+            TargetInstanceId = targetInstanceId,
+        };
+
+        BeginInvokeJS(invocationInfo);
+    }
+
+    protected override void BeginInvokeJS(in JSInvocationInfo invocationInfo)
+    {
         if (_ipcSender is null)
         {
             throw new InvalidOperationException("Cannot invoke JavaScript outside of a WebView context.");
         }
 
-        _ipcSender.BeginInvokeJS(taskId, identifier, argsJson, resultType, targetInstanceId);
+        _ipcSender.BeginInvokeJS(invocationInfo);
     }
 
     protected override void EndInvokeDotNet(DotNetInvocationInfo invocationInfo, in DotNetInvocationResult invocationResult)
@@ -56,6 +71,6 @@ internal sealed class WebViewJSRuntime : JSRuntime
 
     protected override Task TransmitStreamAsync(long streamId, DotNetStreamReference dotNetStreamReference)
     {
-        return TransmitDataStreamToJS.TransmitStreamAsync(this, streamId, dotNetStreamReference);
+        return TransmitDataStreamToJS.TransmitStreamAsync(this, "Blazor._internal.receiveWebViewDotNetDataStream", streamId, dotNetStreamReference);
     }
 }

@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Components.Endpoints.FormMapping;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.AspNetCore.Http;
@@ -14,7 +15,7 @@ internal sealed class RequestDelegateFactoryContext
     // Options
     public required IServiceProvider ServiceProvider { get; init; }
     public required IServiceProviderIsService? ServiceProviderIsService { get; init; }
-    public required List<string>? RouteParameters { get; init; }
+    public required IEnumerable<string>? RouteParameters { get; init; }
     public required bool ThrowOnBadRequest { get; init; }
     public required bool DisableInferredFromBody { get; init; }
     public required EndpointBuilder EndpointBuilder { get; init; }
@@ -45,6 +46,9 @@ internal sealed class RequestDelegateFactoryContext
 
     public NullabilityInfoContext NullabilityContext { get; } = new();
 
+    // Used to invoke TryResolveFormAsync once per handler so that we can
+    // avoid the blocking code-path that occurs when `httpContext.Request.Form`
+    // is called.
     public bool ReadForm { get; set; }
     public bool ReadFormFile { get; set; }
     public ParameterInfo? FirstFormRequestBodyParameter { get; set; }
@@ -59,5 +63,6 @@ internal sealed class RequestDelegateFactoryContext
 
     // Grab these options upfront to avoid the per request DI scope that would be made otherwise to get the options when writing Json
     public required JsonSerializerOptions JsonSerializerOptions { get; set; }
-    public required Expression JsonSerializerOptionsExpression { get; set; }
+
+    public required FormDataMapperOptions FormDataMapperOptions { get; set; }
 }

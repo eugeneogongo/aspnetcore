@@ -275,6 +275,15 @@ public class HttpConnectionOptions
         }
     }
 
+    /// <summary>
+    /// Setting to enable Stateful Reconnect between client and server, this allows reconnecting that preserves messages sent while disconnected.
+    /// Also preserves the <see cref="HttpConnection.ConnectionId"/> when the reconnect is successful.
+    /// </summary>
+    /// <remarks>
+    /// Only works with WebSockets transport currently.
+    /// </remarks>
+    public bool UseStatefulReconnect { get; set; }
+
     private static void ThrowIfUnsupportedPlatform()
     {
         if (OperatingSystem.IsBrowser())

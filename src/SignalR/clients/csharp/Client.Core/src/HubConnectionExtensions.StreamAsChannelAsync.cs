@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Shared;
 namespace Microsoft.AspNetCore.SignalR.Client;
 
 /// <summary>
-/// Extension methods for <see cref="HubConnectionExtensions"/>.
+/// Extension methods for <see cref="HubConnection"/>.
 /// </summary>
 public static partial class HubConnectionExtensions
 {
@@ -302,9 +302,6 @@ public static partial class HubConnectionExtensions
                     }
                 }
             }
-
-            // Manifest any errors in the completion task
-            await inputChannel.Completion.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -314,6 +311,9 @@ public static partial class HubConnectionExtensions
         {
             // This will safely no-op if the catch block above ran.
             outputChannel.Writer.TryComplete();
+
+            // Needed to avoid UnobservedTaskExceptions
+            _ = inputChannel.Completion.Exception;
         }
     }
 }

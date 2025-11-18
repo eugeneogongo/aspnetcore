@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.AspNetCore.Shared;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 
@@ -11,6 +13,8 @@ namespace Microsoft.AspNetCore.Http;
 /// <summary>
 /// Represents a wrapper for RequestHeaders and ResponseHeaders.
 /// </summary>
+[DebuggerDisplay("{DebuggerToString(),nq}")]
+[DebuggerTypeProxy(typeof(StringValuesDictionaryDebugView))]
 public class HeaderDictionary : IHeaderDictionary
 {
     private static readonly string[] EmptyKeys = Array.Empty<string>();
@@ -73,6 +77,7 @@ public class HeaderDictionary : IHeaderDictionary
             {
                 return value;
             }
+
             return StringValues.Empty;
         }
         set
@@ -94,7 +99,15 @@ public class HeaderDictionary : IHeaderDictionary
 
     StringValues IDictionary<string, StringValues>.this[string key]
     {
-        get { return this[key]; }
+        get
+        {
+            if (Store == null)
+            {
+                ThrowKeyNotFoundException();
+            }
+
+            return Store[key];
+        }
         set
         {
             ThrowIfReadOnly();
@@ -359,6 +372,22 @@ public class HeaderDictionary : IHeaderDictionary
         {
             throw new InvalidOperationException("The response headers cannot be modified because the response has already started.");
         }
+    }
+
+    [DoesNotReturn]
+    private static void ThrowKeyNotFoundException()
+    {
+        throw new KeyNotFoundException();
+    }
+
+    internal string DebuggerToString()
+    {
+        var debugText = $"Count = {Count}";
+        if (IsReadOnly)
+        {
+            debugText += ", IsReadOnly = true";
+        }
+        return debugText;
     }
 
     /// <summary>
